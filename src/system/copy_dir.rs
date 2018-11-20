@@ -12,24 +12,16 @@ use std::io;
 use std::path::Path;
 
 /// Builds one unit for every directory and file that needs to be copied.
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-pub struct CopyDir {
-    /// Id of this system.
-    pub id: Option<String>,
-    /// Where to copy from.
-    pub from: Template,
-    /// Where to copy to.
-    pub to: Template,
+system_struct! {
+    CopyDir {
+        from: Template,
+        to: Template,
+    }
 }
 
 impl CopyDir {
-    /// Access the ID of this system.
-    pub fn id(&self) -> Option<String> {
-        self.id.clone()
-    }
-
     /// Copy one directory to another.
-    pub fn apply<E>(self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
+    pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
         E: Copy + e::Environment,
     {

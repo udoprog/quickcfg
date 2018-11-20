@@ -5,8 +5,8 @@ use log::info;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-type UnitId = usize;
-type Data = serde_yaml::Value;
+pub type UnitId = usize;
+pub type Data = serde_yaml::Value;
 
 #[derive(Debug, Default)]
 pub struct UnitAllocator {
@@ -16,14 +16,12 @@ pub struct UnitAllocator {
 impl UnitAllocator {
     /// Create a new system unit.
     pub fn unit(&self, unit: impl Into<Unit>) -> SystemUnit {
-        SystemUnit {
-            id: self.allocate(),
-            depends: Vec::new(),
-            unit: Box::new(unit.into()),
-        }
+        let id = self.allocate();
+        SystemUnit::new(id, unit)
     }
 
-    fn allocate(&self) -> UnitId {
+    /// Allocate a new unit id.
+    pub fn allocate(&self) -> UnitId {
         self.current.fetch_add(1, Ordering::Relaxed)
     }
 }
@@ -38,6 +36,7 @@ pub struct UnitInput<'a> {
 /// A single unit of work.
 #[derive(Debug)]
 pub enum Unit {
+    System,
     CopyFile(CopyFile),
     CreateDir(CreateDir),
 }
@@ -53,6 +52,8 @@ impl Unit {
         use self::Unit::*;
 
         match self {
+            // do nothing.
+            System => Ok(()),
             CopyFile(unit) => unit.apply(input),
             CreateDir(unit) => unit.apply(input),
         }
@@ -72,6 +73,15 @@ pub struct SystemUnit {
 }
 
 impl SystemUnit {
+    /// Create a new system unit.
+    pub fn new(id: UnitId, unit: impl Into<Unit>) -> Self {
+        SystemUnit {
+            id,
+            depends: Vec::new(),
+            unit: Box::new(unit.into()),
+        }
+    }
+
     /// Access the ID of this unit.
     pub fn id(&self) -> UnitId {
         self.id

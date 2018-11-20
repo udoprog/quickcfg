@@ -1,7 +1,8 @@
 use failure::{bail, format_err, Error};
 use log::{info, trace};
 use quickcfg::{
-    environment as e, Config, SystemInput, SystemUnit, Template, UnitAllocator, UnitInput,
+    environment as e, Config, SystemInput, SystemUnit, Template, Unit, UnitAllocator, UnitId,
+    UnitInput,
 };
 use serde_yaml;
 use std::collections::HashMap;
@@ -38,28 +39,57 @@ fn main() -> Result<(), Box<error::Error>> {
         allocator: &allocator,
     };
 
-    let mut systems_to_units: HashMap<Option<String>, Vec<SystemUnit>> = HashMap::new();
-
     // apply systems in parallel.
-    let results = config.systems.into_par_iter().map(|s| {
-        let id = s.id();
-        s.apply(input).and_then(|s| Ok((id, s)))
-    }).collect::<Result<Vec<_>, Error>>()?;
+    let results = config
+        .systems
+        .par_iter()
+        .map(|s| {
+            let id = s.id();
+            let requires = s.requires();
+            s.apply(input).and_then(|s| Ok((id, requires, s)))
+        }).collect::<Result<Vec<_>, Error>>()?;
 
-    for (id, units) in results {
-        systems_to_units.entry(id).or_default().extend(units);
+    let mut systems_to_units: HashMap<Option<&str>, UnitId> = HashMap::new();
+
+    let mut all_units = Vec::new();
+    let mut all_systems = Vec::new();
+
+    for (id, requires, units) in results {
+        all_systems.push((id, requires));
+
+        let mut system_unit = allocator.unit(Unit::System);
+
+        // allocate all IDs.
+        systems_to_units.insert(id, allocator.allocate());
+
+        for unit in &units {
+            system_unit.dependency(unit.id());
+        }
+
+        all_units.extend(units);
     }
 
-    // TODO: apply inter-system dependencies.
+    for (id, requires) in all_systems {
+        let unit_id = *systems_to_units
+            .get(&id)
+            .ok_or_else(|| format_err!("own id not present"))?;
+
+        let mut unit = SystemUnit::new(unit_id, Unit::System);
+
+        for require in requires {
+            let require_id = *systems_to_units
+                .get(&Some(require.as_str()))
+                .ok_or_else(|| format_err!("could not find system with id `{}`", require))?;
+            unit.dependency(require_id);
+        }
+
+        all_units.push(unit);
+    }
 
     // convert into stages.
     // each stage can independently be run in parallel since it's guaranteed not to have any
     // dependencies.
-    let stages = convert_to_stages(
-        systems_to_units
-            .into_iter()
-            .flat_map(|(_, units)| units.into_iter()),
-    )?;
+    let stages = convert_to_stages(all_units)?;
 
     let input = UnitInput { data: &data };
 

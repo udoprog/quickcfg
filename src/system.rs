@@ -23,24 +23,17 @@ pub enum System {
 }
 
 impl System {
-    /// Get the id of this system.
-    pub fn id(&self) -> Option<String> {
-        use self::System::*;
-
-        match *self {
-            CopyDir(ref copy_dir) => copy_dir.id(),
-        }
-    }
+    system_functions!(CopyDir);
 
     /// Apply changes for this system.
-    pub fn apply<E>(self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
+    pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
         E: Copy + e::Environment,
     {
         use self::System::*;
 
-        match self {
-            CopyDir(copy_dir) => copy_dir.apply(input),
+        match *self {
+            CopyDir(ref copy_dir) => copy_dir.apply(input),
         }
     }
 }
