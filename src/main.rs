@@ -40,11 +40,17 @@ fn main() -> Result<(), Box<error::Error>> {
 
     let mut systems_to_units: HashMap<Option<String>, Vec<SystemUnit>> = HashMap::new();
 
-    for system in config.systems {
-        let id = system.id();
-        let units = system.apply(input)?;
+    // apply systems in parallel.
+    let results = config.systems.into_par_iter().map(|s| {
+        let id = s.id();
+        s.apply(input).and_then(|s| Ok((id, s)))
+    }).collect::<Result<Vec<_>, Error>>()?;
+
+    for (id, units) in results {
         systems_to_units.entry(id).or_default().extend(units);
     }
+
+    // TODO: apply inter-system dependencies.
 
     // convert into stages.
     // each stage can independently be run in parallel since it's guaranteed not to have any

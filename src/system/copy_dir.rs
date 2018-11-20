@@ -11,11 +11,15 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+/// Builds one unit for every directory and file that needs to be copied.
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct CopyDir {
+    /// Id of this system.
     pub id: Option<String>,
-    pub source: Template,
-    pub dest: Template,
+    /// Where to copy from.
+    pub from: Template,
+    /// Where to copy to.
+    pub to: Template,
 }
 
 impl CopyDir {
@@ -39,25 +43,25 @@ impl CopyDir {
 
         let mut units = Vec::new();
 
-        let source = match self.source.render_as_relative_path(facts, environment)? {
-            Some(source) => source,
+        let from = match self.from.render_as_relative_path(facts, environment)? {
+            Some(from) => from,
             None => return Ok(units),
         };
 
-        let dest = match self.dest.render_as_relative_path(facts, environment)? {
-            Some(dest) => dest,
+        let to = match self.to.render_as_relative_path(facts, environment)? {
+            Some(to) => to,
             None => return Ok(units),
         };
 
-        let source = source.to_path(root).canonicalize()?;
-        let dest = dest.to_path(root).canonicalize()?;
+        let from = from.to_path(root).canonicalize()?;
+        let to = to.to_path(root).canonicalize()?;
 
         let mut parents = HashMap::new();
 
-        for e in ignore::WalkBuilder::new(&source).hidden(false).build() {
+        for e in ignore::WalkBuilder::new(&from).hidden(false).build() {
             let e = e?;
             let s = e.path();
-            let d = dest.join(s.strip_prefix(&source)?);
+            let d = to.join(s.strip_prefix(&from)?);
 
             let s_m = s.metadata()?;
             let d_m = try_open_meta(&d)?;
