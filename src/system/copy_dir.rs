@@ -1,0 +1,142 @@
+use crate::{
+    environment as e,
+    system::SystemInput,
+    template::Template,
+    unit::{CopyFile, CreateDir, SystemUnit},
+};
+use failure::{bail, Error};
+use serde_derive::Deserialize;
+use std::collections::HashMap;
+use std::fs;
+use std::io;
+use std::path::Path;
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+pub struct CopyDir {
+    pub id: Option<String>,
+    pub source: Template,
+    pub dest: Template,
+}
+
+impl CopyDir {
+    /// Access the ID of this system.
+    pub fn id(&self) -> Option<String> {
+        self.id.clone()
+    }
+
+    /// Copy one directory to another.
+    pub fn apply<E>(self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
+    where
+        E: Copy + e::Environment,
+    {
+        let SystemInput {
+            root,
+            facts,
+            environment,
+            allocator,
+            ..
+        } = input;
+
+        let mut units = Vec::new();
+
+        let source = match self.source.render_as_relative_path(facts, environment)? {
+            Some(source) => source,
+            None => return Ok(units),
+        };
+
+        let dest = match self.dest.render_as_relative_path(facts, environment)? {
+            Some(dest) => dest,
+            None => return Ok(units),
+        };
+
+        let source = source.to_path(root).canonicalize()?;
+        let dest = dest.to_path(root).canonicalize()?;
+
+        let mut parents = HashMap::new();
+
+        for e in ignore::WalkBuilder::new(&source).hidden(false).build() {
+            let e = e?;
+            let s = e.path();
+            let d = dest.join(s.strip_prefix(&source)?);
+
+            let s_m = s.metadata()?;
+            let d_m = try_open_meta(&d)?;
+
+            if s_m.is_dir() {
+                if should_create_dir(d_m.as_ref())? {
+                    let mut unit = allocator.unit(CreateDir(d.to_owned()));
+                    parents.insert(d.to_owned(), unit.id());
+
+                    if let Some(id) = d.parent().and_then(|p| parents.get(p)) {
+                        unit.dependency(*id);
+                    }
+
+                    units.push(unit);
+                }
+
+                continue;
+            }
+
+            if s_m.is_file() {
+                if should_copy_file(&s_m, d_m.as_ref())? {
+                    let mut unit = allocator.unit(CopyFile(s.to_owned(), d.to_owned()));
+
+                    if let Some(id) = d.parent().and_then(|p| parents.get(p)) {
+                        unit.dependency(*id);
+                    }
+
+                    units.push(unit);
+                }
+
+                continue;
+            }
+
+            bail!(
+                "cannot handle file with metadata `{:?}`: {}",
+                s_m,
+                s.display()
+            );
+        }
+
+        return Ok(units);
+
+        /// Try to open metadata, unless the file does not exist.
+        ///
+        /// If the file does not exist, returns `None`.
+        fn try_open_meta(p: &Path) -> Result<Option<fs::Metadata>, Error> {
+            match p.metadata() {
+                Ok(m) => Ok(Some(m)),
+                Err(e) => match e.kind() {
+                    io::ErrorKind::NotFound => Ok(None),
+                    _ => bail!("to get metadata: {}: {}", p.display(), e),
+                },
+            }
+        }
+
+        /// Test if we should create the destination directory.
+        ///
+        /// Pretty straight forward: if it doesn't exist then YES.
+        fn should_create_dir(d: Option<&fs::Metadata>) -> Result<bool, Error> {
+            Ok(d.is_none())
+        }
+
+        /// Test if we should copy the file.
+        ///
+        /// This is true if:
+        ///
+        /// * The destination file does not exist.
+        /// * The destination file has a modified timestamp less than the source file.
+        fn should_copy_file(s: &fs::Metadata, d: Option<&fs::Metadata>) -> Result<bool, Error> {
+            let d = match d {
+                Some(d) => d,
+                None => return Ok(true),
+            };
+
+            if !d.is_file() {
+                return Ok(true);
+            }
+
+            Ok(s.modified()? > d.modified()?)
+        }
+    }
+}
