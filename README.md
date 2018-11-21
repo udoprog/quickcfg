@@ -1,4 +1,5 @@
 # quickcfg
+[![Build Status](https://travis-ci.org/udoprog/quickcfg.svg?branch=master)](https://travis-ci.org/udoprog/quickcfg)
 
 Apply a base configuration to a system, quickly!
 
