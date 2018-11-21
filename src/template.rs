@@ -150,7 +150,7 @@ impl<'de> de::Deserialize<'de> for Template {
 mod tests {
     use self::TemplatePart::*;
     use super::{Template, TemplatePart};
-    use crate::environment;
+    use crate::{environment, facts::Facts};
     use std::collections::HashMap;
 
     #[test]
@@ -168,14 +168,13 @@ mod tests {
             ]
         );
 
-        let mut vars = HashMap::new();
-        vars.insert("foo".to_string(), "baz".to_string());
+        let facts = Facts::new(vec![("foo".to_string(), "baz".to_string())]);
 
         let mut environment = HashMap::new();
         environment.insert("HOME".to_string(), "home".to_string());
 
         assert_eq!(
-            t.render(&vars, environment::Custom(&environment))
+            t.render(&facts, environment::Custom(&environment))
                 .unwrap()
                 .map(|n| n.to_string()),
             Some("root/baz/home/bar.yaml".to_string())

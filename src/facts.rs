@@ -15,6 +15,11 @@ pub const DISTRO: &'static str = "distro";
 pub struct Facts(HashMap<String, String>);
 
 impl Facts {
+    /// Construct a set of custom facts.
+    pub fn new(facts: impl IntoIterator<Item = (String, String)>) -> Self {
+        Facts(facts.into_iter().collect())
+    }
+
     /// Load facts about the system.
     pub fn load() -> Result<Facts, Error> {
         let mut facts = HashMap::new();

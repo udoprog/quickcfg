@@ -13,6 +13,11 @@ const HEADER: &'static str = "quickcfg:";
 pub struct Data(Vec<Mapping>);
 
 impl Data {
+    /// Construct a new set of hierarchical data.
+    pub fn new(data: impl IntoIterator<Item = Mapping>) -> Self {
+        Data(data.into_iter().collect())
+    }
+
     /// Load the given key.
     pub fn load<'de, T>(&self, key: &str) -> Result<Option<T>, Error>
     where
@@ -152,5 +157,46 @@ pub fn load<'a>(
             Value::Mapping(m) => return Ok(m),
             _ => bail!("exists, but is not a mapping"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Data;
+    use serde_yaml::{Mapping, Value};
+
+    #[test]
+    fn test_hiera_lookup() {
+        let mut layer1 = Mapping::new();
+        let mut layer2 = Mapping::new();
+
+        layer1.insert("foo".into(), "foo value".into());
+        layer1.insert("seq".into(), vec![Value::from("item1")].into());
+        layer2.insert("bar".into(), "bar value".into());
+        layer2.insert("seq".into(), vec![Value::from("item2")].into());
+
+        let data = Data::new(vec![layer1, layer2]);
+
+        assert_eq!(
+            data.load::<String>("foo").expect("layer1 key as string"),
+            Some("foo value".into()),
+        );
+
+        assert_eq!(
+            data.load::<String>("bar").expect("layer2 key as string"),
+            Some("bar value".into()),
+        );
+
+        assert_eq!(
+            data.load_or_default::<String>("missing")
+                .expect("missing key to default"),
+            "",
+        );
+
+        assert_eq!(
+            data.load_array::<String>("seq")
+                .expect("merged array from layers"),
+            vec![String::from("item1"), String::from("item2")],
+        );
     }
 }
