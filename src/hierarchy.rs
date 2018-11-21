@@ -1,21 +1,21 @@
 //! Dealing with the hierarchy of data.
-use crate::{
-    facts::Facts,
-    environment as e, Template
-};
+use crate::{environment as e, facts::Facts, Template};
 use failure::{bail, format_err, Error};
-use std::path::Path;
-use std::fs::File;
-use std::io;
 use log::info;
 use serde::Deserialize;
+use std::fs::File;
+use std::io;
+use std::path::Path;
 
 /// Wrapper for hierarchy data.
 pub struct Data(pub serde_yaml::Mapping);
 
 impl Data {
     /// Load the given key, if it doesn't exist, use a default value.
-    pub fn load_or_default<'de, T: Default>(&self, key: &str) -> Result<T, Error> where T: Deserialize<'de> {
+    pub fn load_or_default<'de, T: Default>(&self, key: &str) -> Result<T, Error>
+    where
+        T: Deserialize<'de>,
+    {
         match self.0.get(&serde_yaml::Value::String(key.to_string())) {
             None => Ok(T::default()),
             Some(value) => Ok(T::deserialize(value.clone())?),

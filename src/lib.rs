@@ -1,14 +1,14 @@
 #[macro_use]
 mod macros;
+mod command;
 mod config;
 pub mod environment;
+pub mod facts;
+pub mod hierarchy;
+pub mod packages;
 mod system;
 mod template;
 mod unit;
-pub mod hierarchy;
-pub mod facts;
-pub mod packages;
-mod command;
 
 pub use crate::config::Config;
 pub use crate::system::SystemInput;

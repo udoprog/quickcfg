@@ -1,11 +1,9 @@
+use directories::BaseDirs;
 use failure::{bail, format_err, Error};
 use log::trace;
 use quickcfg::{
-    environment as e, Config, SystemInput, SystemUnit, Unit, UnitAllocator, UnitId,
-    hierarchy,
-    facts,
-    packages,
-    UnitInput,
+    environment as e, facts, hierarchy, packages, Config, SystemInput, SystemUnit, Unit,
+    UnitAllocator, UnitId, UnitInput,
 };
 use serde_yaml;
 use std::collections::HashMap;
@@ -13,7 +11,6 @@ use std::env;
 use std::error;
 use std::fs::File;
 use std::path::Path;
-use directories::BaseDirs;
 
 fn main() -> Result<(), Box<error::Error>> {
     pretty_env_logger::init();
@@ -103,7 +100,10 @@ fn main() -> Result<(), Box<error::Error>> {
     // dependencies.
     let stages = convert_to_stages(all_units)?;
 
-    let input = UnitInput { data: &data, packages: packages.as_ref(), };
+    let input = UnitInput {
+        data: &data,
+        packages: packages.as_ref(),
+    };
 
     for (i, stage) in stages.into_iter().enumerate() {
         trace!("stage: #{} ({} unit(s))", i, stage.units.len());

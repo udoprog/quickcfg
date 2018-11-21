@@ -1,16 +1,16 @@
 //! Things to do.
 
 use crate::{
-    facts::Facts,
-    packages::Packages,
     environment as e,
+    facts::Facts,
     hierarchy::Data,
+    packages::Packages,
     unit::{SystemUnit, UnitAllocator},
 };
+use directories::BaseDirs;
 use failure::Error;
 use serde_derive::Deserialize;
 use std::path::Path;
-use directories::BaseDirs;
 
 mod copy_dir;
 mod install_packages;
@@ -28,10 +28,7 @@ pub enum System {
 }
 
 impl System {
-    system_functions![
-        CopyDir,
-        InstallPackages,
-    ];
+    system_functions![CopyDir, InstallPackages,];
 }
 
 /// All inputs for a system.

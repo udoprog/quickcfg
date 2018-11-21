@@ -1,8 +1,5 @@
 //! Model for template variables.
-use crate::{
-    facts::Facts,
-    environment::Environment,
-};
+use crate::{environment::Environment, facts::Facts};
 use failure::{bail, format_err, Error};
 use relative_path::RelativePathBuf;
 use serde::de;

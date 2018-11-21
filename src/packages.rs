@@ -5,6 +5,7 @@
 mod debian;
 
 use failure::Error;
+use std::ffi::OsStr;
 
 /// Package abstraction.
 #[derive(Debug)]
@@ -26,7 +27,17 @@ impl Packages {
     /// List all packages on this system.
     pub fn list_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {
-            Packages::Debian(ref packages) => packages.list_packages(),
+            Packages::Debian(ref p) => p.list_packages(),
+        }
+    }
+
+    /// Install the given packages.
+    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
+    where
+        S: AsRef<OsStr>,
+    {
+        match *self {
+            Packages::Debian(ref p) => p.install_packages(packages),
         }
     }
 }

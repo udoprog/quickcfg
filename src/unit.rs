@@ -1,13 +1,10 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use failure::{Error, format_err};
+use crate::{hierarchy::Data, packages::Packages};
+use failure::{format_err, Error};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crate::{
-    packages::Packages,
-    hierarchy::Data,
-};
-use std::collections::HashSet;
 
 pub type UnitId = usize;
 
@@ -136,8 +133,8 @@ pub struct CopyFile(pub PathBuf, pub PathBuf);
 
 impl CopyFile {
     fn apply(self, input: UnitInput) -> Result<(), Error> {
-        use log::info;
         use handlebars::Handlebars;
+        use log::info;
         use std::fs::{self, File};
         use std::io::Write;
 
@@ -162,19 +159,14 @@ pub struct InstallPackages(pub HashSet<String>);
 
 impl InstallPackages {
     fn apply(self, input: UnitInput) -> Result<(), Error> {
-        use log::info;
+        let UnitInput { packages, .. } = input;
 
-        let UnitInput {
-            packages,
-            ..
-        } = input;
+        let packages = packages
+            .ok_or_else(|| format_err!("no package manager available to install packages"))?;
 
-        let _packages = packages.ok_or_else(|| format_err!("no package manager available to install packages"))?;
+        let InstallPackages(packages_to_install) = self;
 
-        let InstallPackages(packages) = self;
-
-        info!("WOULD INSTALL: {:?}", packages);
-        Ok(())
+        packages.install_packages(&packages_to_install)
     }
 }
 

@@ -3,8 +3,8 @@ use crate::{
     system::SystemInput,
     unit::{self, SystemUnit},
 };
-use log::warn;
 use failure::Error;
+use log::warn;
 use serde_derive::Deserialize;
 use std::collections::HashSet;
 

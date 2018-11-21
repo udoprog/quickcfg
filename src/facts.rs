@@ -1,11 +1,11 @@
 //! Loading facts about the system that we are currently running on.
 
-use std::collections::HashMap;
 use failure::{bail, Error};
-use std::path::Path;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
+use std::path::Path;
 
 /// The holder of all the facts detected in the system.
 pub struct Facts(pub HashMap<String, String>);
@@ -77,4 +77,3 @@ pub fn load() -> Result<Facts, Error> {
         Ok(Some(value))
     }
 }
-

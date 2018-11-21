@@ -4,13 +4,13 @@ use crate::{
     template::Template,
     unit::{CopyFile, CreateDir, SystemUnit},
 };
-use failure::{bail, Error, format_err};
+use failure::{bail, format_err, Error};
+use relative_path::RelativePathBuf;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
-use relative_path::RelativePathBuf;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -57,7 +57,8 @@ impl CopyDir {
 
         let to = {
             if self.to_home {
-                let base_dirs = base_dirs.ok_or_else(|| format_err!("no base directories available"))?;
+                let base_dirs =
+                    base_dirs.ok_or_else(|| format_err!("no base directories available"))?;
                 relative_to.to_path(base_dirs.home_dir()).canonicalize()?
             } else {
                 relative_to.to_path(root).canonicalize()?
