@@ -1,9 +1,11 @@
 //! Model for template variables.
-use crate::environment::Environment;
+use crate::{
+    facts::Facts,
+    environment::Environment,
+};
 use failure::{bail, format_err, Error};
 use relative_path::RelativePathBuf;
 use serde::de;
-use std::collections::HashMap;
 
 /// A loaded template string.
 #[derive(Debug, PartialEq, Eq)]
@@ -97,10 +99,10 @@ impl Template {
     /// Render as a relative path buffer.
     pub fn render_as_relative_path(
         &self,
-        vars: &HashMap<String, String>,
+        facts: &Facts,
         environment: impl Environment,
     ) -> Result<Option<RelativePathBuf>, Error> {
-        let value = match self.render(vars, environment)? {
+        let value = match self.render(facts, environment)? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -111,7 +113,7 @@ impl Template {
     /// Render the template variable.
     pub fn render(
         &self,
-        variables: &HashMap<String, String>,
+        facts: &Facts,
         environment: impl Environment,
     ) -> Result<Option<String>, Error> {
         use self::TemplatePart::*;
@@ -122,7 +124,7 @@ impl Template {
         for part in &self.parts {
             match *part {
                 Static(ref s) => out.write_str(s.as_str())?,
-                Variable(ref var) => match variables.get(var) {
+                Variable(ref var) => match facts.0.get(var) {
                     Some(value) => out.write_str(value.as_str())?,
                     None => return Ok(None),
                 },

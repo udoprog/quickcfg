@@ -4,18 +4,21 @@ use crate::{
     template::Template,
     unit::{CopyFile, CreateDir, SystemUnit},
 };
-use failure::{bail, Error};
+use failure::{bail, Error, format_err};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
+use relative_path::RelativePathBuf;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
     CopyDir {
-        from: Template,
-        to: Template,
+        pub from: Template,
+        pub to: Option<Template>,
+        #[serde(default)]
+        pub to_home: bool,
     }
 }
 
@@ -27,6 +30,7 @@ impl CopyDir {
     {
         let SystemInput {
             root,
+            base_dirs,
             facts,
             environment,
             allocator,
@@ -35,18 +39,30 @@ impl CopyDir {
 
         let mut units = Vec::new();
 
-        let from = match self.from.render_as_relative_path(facts, environment)? {
+        let relative_from = match self.from.render_as_relative_path(facts, environment)? {
             Some(from) => from,
             None => return Ok(units),
         };
 
-        let to = match self.to.render_as_relative_path(facts, environment)? {
-            Some(to) => to,
-            None => return Ok(units),
+        let from = relative_from.to_path(root).canonicalize()?;
+
+        // resolve destination, if unspecified defaults to relative current directory.
+        let relative_to = match self.to.as_ref() {
+            Some(to) => match to.render_as_relative_path(facts, environment)? {
+                Some(to) => to,
+                None => return Ok(units),
+            },
+            None => RelativePathBuf::from("."),
         };
 
-        let from = from.to_path(root).canonicalize()?;
-        let to = to.to_path(root).canonicalize()?;
+        let to = {
+            if self.to_home {
+                let base_dirs = base_dirs.ok_or_else(|| format_err!("no base directories available"))?;
+                relative_to.to_path(base_dirs.home_dir()).canonicalize()?
+            } else {
+                relative_to.to_path(root).canonicalize()?
+            }
+        };
 
         let mut parents = HashMap::new();
 

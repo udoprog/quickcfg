@@ -5,6 +5,10 @@ Apply a base configuration to a system, quickly!
 It reads a configuration and template structure from a [dotfiles] directory and tries to normalize
 the machine that it is run base on this configuration.
 
+**WARNING**:
+This will modify your system and potentially overwrite files!
+Make sure you have backed everything up before using it!
+
 [dotfiles]: https://github.com/udoprog/dotfiles
 
 ## Features
@@ -31,6 +35,12 @@ hierarchy:
 systems:
   # system to copy an entire directory to another.
   - type: copy_dir
+    # directory relative to root of this project.
     from: home
-    to: ..
+    to_home: true
+  # system to ensure that a set of packages are installed.
+  - type: install-packages
+    # data key to use when resolving packages
+    # will look up this key in the specified hierarchy.
+    key: packages
 ```

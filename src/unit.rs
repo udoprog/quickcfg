@@ -1,11 +1,15 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use failure::Error;
+use failure::{Error, format_err};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::{
+    packages::Packages,
+    hierarchy::Data,
+};
+use std::collections::HashSet;
 
 pub type UnitId = usize;
-pub type Data = serde_yaml::Value;
 
 #[derive(Debug, Default)]
 pub struct UnitAllocator {
@@ -28,6 +32,8 @@ impl UnitAllocator {
 /// All inputs for a system.
 #[derive(Clone, Copy)]
 pub struct UnitInput<'a> {
+    /// Primary package manager.
+    pub packages: Option<&'a Packages>,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
 }
@@ -38,6 +44,7 @@ pub enum Unit {
     System,
     CopyFile(CopyFile),
     CreateDir(CreateDir),
+    InstallPackages(InstallPackages),
 }
 
 impl From<CopyFile> for Unit {
@@ -55,6 +62,7 @@ impl Unit {
             System => Ok(()),
             CopyFile(unit) => unit.apply(input),
             CreateDir(unit) => unit.apply(input),
+            InstallPackages(unit) => unit.apply(input),
         }
     }
 }
@@ -108,7 +116,10 @@ pub struct CreateDir(pub PathBuf);
 
 impl CreateDir {
     fn apply(self, _: UnitInput) -> Result<(), Error> {
+        use std::fs;
+
         let CreateDir(dir) = self;
+        fs::create_dir(&dir)?;
         Ok(())
     }
 }
@@ -125,8 +136,10 @@ pub struct CopyFile(pub PathBuf, pub PathBuf);
 
 impl CopyFile {
     fn apply(self, input: UnitInput) -> Result<(), Error> {
+        use log::info;
         use handlebars::Handlebars;
-        use std::fs;
+        use std::fs::{self, File};
+        use std::io::Write;
 
         let CopyFile(from, to) = self;
 
@@ -135,8 +148,38 @@ impl CopyFile {
         // NB: render template.
         let content = fs::read_to_string(&from)?;
         let handlebars = Handlebars::new();
-        let _ = handlebars.render_template(&content, data)?;
+        let out = handlebars.render_template(&content, &data.0)?;
 
+        info!("{} -> {}", from.display(), to.display());
+        File::create(&to)?.write_all(out.as_bytes())?;
         Ok(())
+    }
+}
+
+/// Install a number of packages.
+#[derive(Debug)]
+pub struct InstallPackages(pub HashSet<String>);
+
+impl InstallPackages {
+    fn apply(self, input: UnitInput) -> Result<(), Error> {
+        use log::info;
+
+        let UnitInput {
+            packages,
+            ..
+        } = input;
+
+        let _packages = packages.ok_or_else(|| format_err!("no package manager available to install packages"))?;
+
+        let InstallPackages(packages) = self;
+
+        info!("WOULD INSTALL: {:?}", packages);
+        Ok(())
+    }
+}
+
+impl From<InstallPackages> for Unit {
+    fn from(value: InstallPackages) -> Unit {
+        Unit::InstallPackages(value)
     }
 }

@@ -2,7 +2,8 @@
 macro_rules! system_struct {
     ($name:ident {
         $(
-        $field:ident : $field_ty:ty,
+        $(#[$attr:meta])*
+        pub $field:ident : $field_ty:ty,
         )*
     }) => {
         #[derive(Deserialize, Debug, PartialEq, Eq)]
@@ -14,7 +15,10 @@ macro_rules! system_struct {
             /// Things that this system requires.
             pub requires: Vec<String>,
 
-            $($field: $field_ty,)*
+            $(
+            $(#[$attr])*
+            pub $field: $field_ty,
+            )*
         }
 
         impl $name {
@@ -30,7 +34,7 @@ macro_rules! system_struct {
 }
 
 macro_rules! system_functions {
-    ($($name:ident),*) => {
+    ($($name:ident,)*) => {
         /// Get the id of this system.
         pub fn id(&self) -> Option<&str> {
             use self::System::*;
