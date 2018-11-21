@@ -53,8 +53,7 @@ impl Data {
 
         for m in &self.0 {
             if let Some(value) = m.get(&key) {
-                let values: Vec<T> = Deserialize::deserialize(value.clone())?;
-                out.extend(values);
+                out.extend(<Vec<T> as Deserialize>::deserialize(value.clone())?);
             }
         }
 

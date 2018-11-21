@@ -6,12 +6,10 @@ use quickcfg::{
     facts::Facts,
     hierarchy, opts, packages,
     unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
-    Config, SystemInput,
+    Config, Load, Save, State, SystemInput,
 };
-use serde_yaml;
 use std::collections::HashMap;
-use std::fs::File;
-use std::path::Path;
+use std::time::SystemTime;
 
 fn main() {
     use std::process;
@@ -35,14 +33,23 @@ fn try_main() -> Result<(), Error> {
     let opts = opts::opts()?;
     let root = opts.root()?;
 
-    let config = root.join("config.yml");
+    let state_path = root.join(".state");
 
-    let config = if config.is_file() {
-        load_config(&config)?
-    } else {
-        log::warn!("no configuration: {}", config.display());
-        Default::default()
+    let config = Config::load(&root.join("config.yml"))?.unwrap_or_default();
+    let mut state = State::load(&state_path)?.unwrap_or_default();
+
+    let should_update = match state.last_update("git") {
+        Some(last_update) => {
+            let duration = SystemTime::now().duration_since(last_update.clone())?;
+            duration.as_secs() > 10
+        }
+        None => true,
     };
+
+    if should_update {
+        println!("GIT UPDATE");
+        state.touch("git");
+    }
 
     let facts = Facts::load()?;
     let environment = e::Real;
@@ -133,6 +140,7 @@ fn try_main() -> Result<(), Error> {
             .collect::<Result<_, Error>>()?;
     }
 
+    state.save(&state_path)?;
     Ok(())
 }
 
@@ -173,13 +181,4 @@ fn convert_to_stages(units: impl IntoIterator<Item = SystemUnit>) -> Result<Vec<
     }
 
     Ok(stages)
-}
-
-/// Load configuration from the given path.
-fn load_config(path: &Path) -> Result<Config, Error> {
-    let f = File::open(path)
-        .map_err(|e| format_err!("failed to open config: {}: {}", path.display(), e))?;
-    let c = serde_yaml::from_reader(f)
-        .map_err(|e| format_err!("failed to parse config: {}: {}", path.display(), e))?;
-    Ok(c)
 }
