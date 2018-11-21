@@ -22,7 +22,7 @@ Make sure you have backed everything up before using it!
 * Dependency graph! Builds a dependency graph internally, making sure everything happens _in the
   right order_ and as quickly as possible.
 * Flexible configuration, but opinionated!
-  There are a couple of powerful primitives available (e.g. `copy_dir`), which does _a lot_ of work
+  There are a couple of powerful primitives available (e.g. `copy-dir`), which does _a lot_ of work
   with very little configuration.
 
 ## Configuration
@@ -37,7 +37,7 @@ hierarchy:
 
 systems:
   # system to copy an entire directory to another.
-  - type: copy_dir
+  - type: copy-dir
     # directory relative to root of this project.
     from: home
     to_home: true
@@ -47,6 +47,19 @@ systems:
     # will look up this key in the specified hierarchy.
     key: packages
 ```
+
+## Systems
+
+#### `copy-dir`
+
+Copies a directory recursively.
+
+#### `install-packages`
+
+Compares the set of installed packages, with a set of packages from the hierarchy to install and
+installs any that are missing.
+
+Will use `sudo`.
 
 ## Packages
 
