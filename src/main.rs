@@ -2,16 +2,32 @@ use directories::BaseDirs;
 use failure::{bail, format_err, Error};
 use log;
 use quickcfg::{
-    environment as e, facts::Facts, hierarchy, opts, packages, Config, SystemInput, SystemUnit,
-    Unit, UnitAllocator, UnitId, UnitInput,
+    environment as e,
+    facts::Facts,
+    hierarchy, opts, packages,
+    unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
+    Config, SystemInput,
 };
 use serde_yaml;
 use std::collections::HashMap;
-use std::error;
 use std::fs::File;
 use std::path::Path;
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() {
+    use std::process;
+
+    if let Err(e) = try_main() {
+        eprintln!("{}", e);
+
+        for cause in e.iter_causes() {
+            eprintln!("Caused by: {}", cause);
+        }
+
+        process::exit(1);
+    }
+}
+
+fn try_main() -> Result<(), Error> {
     use rayon::prelude::*;
 
     pretty_env_logger::init();

@@ -10,9 +10,8 @@ pub mod opts;
 pub mod packages;
 mod system;
 mod template;
-mod unit;
+pub mod unit;
 
 pub use crate::config::Config;
 pub use crate::system::SystemInput;
 pub use crate::template::Template;
-pub use crate::unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput};

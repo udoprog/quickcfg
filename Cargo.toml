@@ -2,10 +2,20 @@
 name = "quickcfg"
 version = "0.1.0"
 authors = ["John-John Tedro <udoprog@tedro.se>"]
+license = "MIT/Apache-2.0"
+categories = ["command-line-utilities"]
+documentation = "https://docs.rs/udoprog/quickcfg"
+homepage = "https://github.com/udoprog/quickcfg"
+repository = "https://github.com/udoprog/quickcfg"
+readme = "README.md"
+edition = "2018"
+
 description = """
 Do basic configuration of a system, declaratively and quickly.
 """
-edition = "2018"
+
+[badges]
+travis-ci = { repository = "udoprog/quickcfg" }
 
 [dependencies]
 serde = "1"
