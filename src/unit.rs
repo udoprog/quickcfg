@@ -1,7 +1,6 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use failure::Error;
-use log::info;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

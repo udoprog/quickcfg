@@ -1,12 +1,19 @@
 /// Macro to populate a system struct with its base fields.
 macro_rules! system_struct {
-    ($name:ident { $($field:ident : $field_ty:ty,)* }) => {
+    ($name:ident {
+        $(
+        $field:ident : $field_ty:ty,
+        )*
+    }) => {
         #[derive(Deserialize, Debug, PartialEq, Eq)]
         pub struct $name {
             /// Id of this system.
             pub id: Option<String>,
+
+            #[serde(default)]
             /// Things that this system requires.
             pub requires: Vec<String>,
+
             $($field: $field_ty,)*
         }
 
@@ -29,7 +36,7 @@ macro_rules! system_functions {
             use self::System::*;
 
             match *self {
-                $($name(ref copy_dir) => copy_dir.id(),)*
+                $($name(ref system) => system.id(),)*
             }
         }
 
@@ -38,7 +45,20 @@ macro_rules! system_functions {
             use self::System::*;
 
             match *self {
-                $($name(ref copy_dir) => copy_dir.requires(),)*
+                $($name(ref system) => system.requires(),)*
+            }
+        }
+
+        /// Apply changes for this system.
+        pub fn apply<E>(&self, input: $crate::system::SystemInput<E>)
+            -> Result<Vec<$crate::system::SystemUnit>, Error>
+        where
+            E: Copy + $crate::environment::Environment,
+        {
+            use self::System::*;
+
+            match *self {
+                $($name(ref system) => system.apply(input),)*
             }
         }
     }
