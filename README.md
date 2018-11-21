@@ -5,6 +5,8 @@ Apply a base configuration to a system, quickly!
 It reads a configuration and template structure from a [dotfiles] directory and tries to normalize
 the machine that it is run base on this configuration.
 
+Until Rust Edition 2018 is released, this crate is _Nightly Only_.
+
 **WARNING**:
 This will modify your system and potentially overwrite files!
 Make sure you have backed everything up before using it!

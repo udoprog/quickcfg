@@ -1,9 +1,6 @@
 language: rust
 rust:
-  - 1.26.0
   - nightly
-  - beta
-  - stable
 cache: cargo
 branches:
   only:
