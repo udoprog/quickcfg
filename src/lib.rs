@@ -4,6 +4,7 @@ mod command;
 mod config;
 pub mod environment;
 pub mod facts;
+mod git;
 pub mod hierarchy;
 pub mod packages;
 mod system;
