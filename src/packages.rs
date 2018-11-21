@@ -4,7 +4,9 @@
 
 mod debian;
 
+use crate::facts::{self, Facts};
 use failure::Error;
+use log::warn;
 use std::ffi::OsStr;
 
 /// Package abstraction.
@@ -20,8 +22,20 @@ pub struct Package {
 
 impl Packages {
     /// Detect which package provider to use.
-    pub fn detect() -> Result<Option<Packages>, Error> {
-        Ok(Some(Packages::Debian(debian::Packages::new())))
+    pub fn detect(facts: &Facts) -> Result<Option<Packages>, Error> {
+        let distro = match facts.get(facts::DISTRO) {
+            // NB: unsupported distro, good luck!
+            None => return Ok(None),
+            Some(distro) => distro,
+        };
+
+        match distro {
+            "debian" => Ok(Some(Packages::Debian(debian::Packages::new()))),
+            distro => {
+                warn!("no package integration for distro: {}", distro);
+                Ok(None)
+            }
+        }
     }
 
     /// List all packages on this system.

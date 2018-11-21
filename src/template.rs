@@ -121,8 +121,8 @@ impl Template {
         for part in &self.parts {
             match *part {
                 Static(ref s) => out.write_str(s.as_str())?,
-                Variable(ref var) => match facts.0.get(var) {
-                    Some(value) => out.write_str(value.as_str())?,
+                Variable(ref var) => match facts.get(var) {
+                    Some(value) => out.write_str(value)?,
                     None => return Ok(None),
                 },
                 Environ(ref environ) => match environment.var(environ)? {

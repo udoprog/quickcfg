@@ -2,7 +2,7 @@ use directories::BaseDirs;
 use failure::{bail, format_err, Error};
 use log::trace;
 use quickcfg::{
-    environment as e, facts, hierarchy, packages, Config, SystemInput, SystemUnit, Unit,
+    environment as e, facts::Facts, hierarchy, packages, Config, SystemInput, SystemUnit, Unit,
     UnitAllocator, UnitId, UnitInput,
 };
 use serde_yaml;
@@ -26,11 +26,11 @@ fn main() -> Result<(), Box<error::Error>> {
         Default::default()
     };
 
-    let facts = facts::load()?;
+    let facts = Facts::load()?;
     let environment = e::Real;
     let data = hierarchy::load(&config.hierarchy, &root, &facts, environment)?;
 
-    let packages = packages::Packages::detect()?;
+    let packages = packages::Packages::detect(&facts)?;
 
     trace!("Detected package manager: {:?}", packages);
 

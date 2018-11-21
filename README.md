@@ -44,3 +44,9 @@ systems:
     # will look up this key in the specified hierarchy.
     key: packages
 ```
+
+## Packages
+
+We support installing packages on the following platforms:
+
+* Debian, through `dpkg-query` and `apt` (fact: `distro=debian`).
