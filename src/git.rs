@@ -2,7 +2,7 @@
 
 use crate::command;
 use failure::Error;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Helper to interact with a git repository.
 pub struct Git {

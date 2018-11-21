@@ -1,28 +1,30 @@
 use directories::BaseDirs;
 use failure::{bail, format_err, Error};
-use log::trace;
+use log;
 use quickcfg::{
-    environment as e, facts::Facts, hierarchy, packages, Config, SystemInput, SystemUnit, Unit,
-    UnitAllocator, UnitId, UnitInput,
+    environment as e, facts::Facts, hierarchy, opts, packages, Config, SystemInput, SystemUnit,
+    Unit, UnitAllocator, UnitId, UnitInput,
 };
 use serde_yaml;
 use std::collections::HashMap;
-use std::env;
 use std::error;
 use std::fs::File;
 use std::path::Path;
 
 fn main() -> Result<(), Box<error::Error>> {
-    pretty_env_logger::init();
-
     use rayon::prelude::*;
 
-    let root = env::current_dir()?;
+    pretty_env_logger::init();
+
+    let opts = opts::opts()?;
+    let root = opts.root()?;
+
     let config = root.join("config.yml");
 
-    let config: quickcfg::Config = if config.is_file() {
+    let config = if config.is_file() {
         load_config(&config)?
     } else {
+        log::warn!("no configuration: {}", config.display());
         Default::default()
     };
 
@@ -32,7 +34,7 @@ fn main() -> Result<(), Box<error::Error>> {
 
     let packages = packages::Packages::detect(&facts)?;
 
-    trace!("Detected package manager: {:?}", packages);
+    log::trace!("Detected package manager: {:?}", packages);
 
     let allocator = UnitAllocator::default();
 
@@ -106,7 +108,7 @@ fn main() -> Result<(), Box<error::Error>> {
     };
 
     for (i, stage) in stages.into_iter().enumerate() {
-        trace!("stage: #{} ({} unit(s))", i, stage.units.len());
+        log::trace!("stage: #{} ({} unit(s))", i, stage.units.len());
 
         stage
             .units

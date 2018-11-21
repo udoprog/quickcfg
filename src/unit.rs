@@ -142,10 +142,21 @@ impl CopyFile {
 
         let UnitInput { data, .. } = input;
 
-        // NB: render template.
-        let content = fs::read_to_string(&from)?;
+        let content = fs::read_to_string(&from)
+            .map_err(|e| format_err!("failed to read path: {}: {}", from.display(), e))?;
+
+        let data = data.load_from_spec(&content).map_err(|e| {
+            format_err!(
+                "failed to load hierarchy for path: {}: {}",
+                from.display(),
+                e
+            )
+        })?;
+
         let handlebars = Handlebars::new();
-        let out = handlebars.render_template(&content, &data.0)?;
+        let out = handlebars
+            .render_template(&content, &data)
+            .map_err(|e| format_err!("failed to render template: {}: {}", from.display(), e))?;
 
         info!("{} -> {}", from.display(), to.display());
         File::create(&to)?.write_all(out.as_bytes())?;

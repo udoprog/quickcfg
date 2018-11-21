@@ -50,3 +50,19 @@ systems:
 We support installing packages on the following platforms:
 
 * Debian, through `dpkg-query` and `apt` (fact: `distro=debian`).
+
+## Templating
+
+Any file being copied is treated as a [`handlebars`] template.
+
+Any template file can make use of hierarchy data, by specifying their dependencies using
+a `quickcfg:` tag at the top of the file, like this:
+
+```
+# quickcfg: name
+Hi, my name is {{name}}
+```
+
+`quickcfg` will scan the first 5 lines of any file being copied for this.
+
+[`handlebars`]: https://handlebarsjs.com/

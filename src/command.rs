@@ -3,8 +3,8 @@
 use failure::{bail, Error};
 use std::borrow::Cow;
 use std::ffi::OsStr;
-use std::process;
 use std::path::{Path, PathBuf};
+use std::process;
 
 /// A command wrapper that simplifies interaction with external commands.
 #[derive(Debug, Clone)]
@@ -16,7 +16,10 @@ pub struct Command<'a> {
 impl<'a> Command<'a> {
     /// Construct a new command wrapper.
     pub fn new(name: impl Into<Cow<'a, str>>) -> Command<'a> {
-        Command { name: name.into(), working_directory: None }
+        Command {
+            name: name.into(),
+            working_directory: None,
+        }
     }
 
     /// Configure the working directory of this command.
