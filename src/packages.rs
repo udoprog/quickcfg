@@ -38,6 +38,13 @@ impl Packages {
         }
     }
 
+    /// Get the name of the current package manager.
+    pub fn name(&self) -> &str {
+        match *self {
+            Packages::Debian(..) => "debian",
+        }
+    }
+
     /// List all packages on this system.
     pub fn list_packages(&self) -> Result<Vec<Package>, Error> {
         match *self {

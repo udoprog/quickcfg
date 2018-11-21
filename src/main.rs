@@ -4,11 +4,12 @@ use log;
 use quickcfg::{
     environment as e,
     facts::Facts,
-    hierarchy, opts, packages,
+    git, hierarchy, opts, packages,
     unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
-    Config, Load, Save, State, SystemInput,
+    Config, DiskState, Load, Save, State, SystemInput,
 };
 use std::collections::HashMap;
+use std::path::Path;
 use std::time::SystemTime;
 
 fn main() {
@@ -36,19 +37,14 @@ fn try_main() -> Result<(), Error> {
     let state_path = root.join(".state");
 
     let config = Config::load(&root.join("config.yml"))?.unwrap_or_default();
-    let mut state = State::load(&state_path)?.unwrap_or_default();
+    let mut state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
 
-    let should_update = match state.last_update("git") {
-        Some(last_update) => {
-            let duration = SystemTime::now().duration_since(last_update.clone())?;
-            duration.as_secs() > 10
-        }
-        None => true,
-    };
+    if !update_git_and_test(&opts, &root, &mut state)? {
+        return Ok(());
+    }
 
-    if should_update {
-        println!("GIT UPDATE");
-        state.touch("git");
+    if opts.updates_only {
+        println!("Updates found, running...");
     }
 
     let facts = Facts::load()?;
@@ -57,7 +53,11 @@ fn try_main() -> Result<(), Error> {
 
     let packages = packages::Packages::detect(&facts)?;
 
-    log::trace!("Detected package manager: {:?}", packages);
+    if let Some(packages) = packages.as_ref() {
+        log::trace!("detected package manager: {}", packages.name());
+    } else {
+        log::warn!("no package manager detected");
+    }
 
     let allocator = UnitAllocator::default();
 
@@ -140,8 +140,82 @@ fn try_main() -> Result<(), Error> {
             .collect::<Result<_, Error>>()?;
     }
 
-    state.save(&state_path)?;
+    if let Some(serialized) = state.serialize() {
+        log::info!("writing dirty state: {}", state_path.display());
+        serialized.save(&state_path)?;
+    }
+
     Ok(())
+}
+
+/// Try to update git and determine if the command should keep running.
+///
+/// If opts.updates_only is set, we only want to continue running if we have detected changes in
+/// the configuration.
+fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Result<bool, Error> {
+    let do_update = match state.last_update("git") {
+        Some(last_update) => {
+            let duration = SystemTime::now().duration_since(last_update.clone())?;
+            duration.as_secs() > 10
+        }
+        None => true,
+    };
+
+    let mut updated = false;
+
+    if do_update {
+        let mut yes = true;
+
+        if !opts.non_interactive {
+            yes = prompt("Do you want to check for updates?")?;
+        }
+
+        if yes {
+            let git = git::Git::new(root);
+
+            if git.needs_update()? {
+                if opts.force {
+                    git.force_update()?;
+                } else {
+                    git.update()?;
+                }
+
+                updated = true;
+            }
+
+            println!("git update");
+            state.touch("git");
+        }
+    }
+
+    Ok(!opts.updates_only || updated)
+}
+
+/// Prompt for input.
+fn prompt(question: &str) -> Result<bool, Error> {
+    use std::io::{self, Write};
+
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut input = String::new();
+
+    loop {
+        write!(stdout, "{} [Y/n] ", question)?;
+        stdout.flush()?;
+
+        input.clear();
+        stdin.read_line(&mut input)?;
+
+        match input.as_str().trim() {
+            // NB: default.
+            "" => return Ok(true),
+            "y" | "ye" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            _ => {
+                writeln!(stdout, "Please response with 'yes' or 'no' (or 'y' or 'n')")?;
+            }
+        }
+    }
 }
 
 /// Discrete stages to run.

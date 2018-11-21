@@ -23,6 +23,10 @@ fn app() -> App<'static, 'static> {
             Arg::with_name("non-interactive")
                 .long("non-interactive")
                 .help("Force to run in non-interactive mode."),
+        ).arg(
+            Arg::with_name("updates-only")
+                .long("updates-only")
+                .help("Only run if there are updates."),
         )
 }
 
@@ -35,6 +39,7 @@ pub fn opts() -> Result<Opts, Error> {
     opts.root = matches.value_of("root").map(PathBuf::from);
     opts.force = matches.is_present("force");
     opts.non_interactive = matches.is_present("force");
+    opts.updates_only = matches.is_present("updates-only");
 
     Ok(opts)
 }
@@ -48,6 +53,8 @@ pub struct Opts {
     pub force: bool,
     /// Run in non-interactive mode.
     pub non_interactive: bool,
+    /// Only run if there are updates to the repo.
+    pub updates_only: bool,
 }
 
 impl Opts {
