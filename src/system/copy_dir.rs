@@ -1,6 +1,5 @@
 use crate::{environment as e, system::SystemInput, template::Template, unit::SystemUnit};
-use failure::{bail, format_err, Error};
-use relative_path::RelativePathBuf;
+use failure::{bail, Error};
 use serde_derive::Deserialize;
 use std::fs;
 use std::io;
@@ -11,8 +10,6 @@ system_struct! {
     CopyDir {
         pub from: Template,
         pub to: Option<Template>,
-        #[serde(default)]
-        pub to_home: bool,
         #[serde(default)]
         pub templates: bool,
     }
@@ -35,30 +32,21 @@ impl CopyDir {
 
         let mut units = Vec::new();
 
-        let relative_from = match self.from.render_as_relative_path(facts, environment)? {
+        let from = match self
+            .from
+            .render_as_path(root, base_dirs, facts, environment)?
+        {
             Some(from) => from,
             None => return Ok(units),
         };
 
-        let from = relative_from.to_path(root).canonicalize()?;
-
         // resolve destination, if unspecified defaults to relative current directory.
-        let relative_to = match self.to.as_ref() {
-            Some(to) => match to.render_as_relative_path(facts, environment)? {
-                Some(to) => to,
+        let to = match self.to.as_ref() {
+            Some(to) => match to.render_as_path(root, base_dirs, facts, environment)? {
+                Some(to) => to.canonicalize()?,
                 None => return Ok(units),
             },
-            None => RelativePathBuf::from("."),
-        };
-
-        let to = {
-            if self.to_home {
-                let base_dirs =
-                    base_dirs.ok_or_else(|| format_err!("no base directories available"))?;
-                relative_to.to_path(base_dirs.home_dir()).canonicalize()?
-            } else {
-                relative_to.to_path(root).canonicalize()?
-            }
+            None => root.canonicalize()?,
         };
 
         for e in ignore::WalkBuilder::new(&from).hidden(false).build() {

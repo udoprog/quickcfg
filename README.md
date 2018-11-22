@@ -40,7 +40,8 @@ systems:
   - type: copy-dir
     # directory relative to root of this project.
     from: home
-    to_home: true
+    to: home:.
+    templates: true
   # system to ensure that a set of packages are installed.
   - type: install-packages
     # data key to use when resolving packages

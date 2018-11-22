@@ -1,12 +1,15 @@
 //! Model for template variables.
 use crate::{environment::Environment, facts::Facts};
+use directories::BaseDirs;
 use failure::{bail, format_err, Error};
-use relative_path::RelativePathBuf;
+use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
+use std::path::{Path, PathBuf};
 
 /// A loaded template string.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Template {
+    home: bool,
     parts: Vec<TemplatePart>,
 }
 
@@ -23,7 +26,14 @@ pub enum TemplatePart {
 
 impl Template {
     /// Parse a template string, with variables delimited with `{var}`.
-    pub fn parse(input: &str) -> Result<Template, Error> {
+    pub fn parse(mut input: &str) -> Result<Template, Error> {
+        let mut home = false;
+
+        if input.starts_with("home:") {
+            home = true;
+            input = &input[5..];
+        }
+
         let mut parts = Vec::new();
         let mut it = input.char_indices();
 
@@ -57,7 +67,7 @@ impl Template {
             parts.push(TemplatePart::Static(input[start..].to_string()));
         }
 
-        return Ok(Template { parts });
+        return Ok(Template { home, parts });
 
         fn var<'s>(
             input: &'s str,
@@ -105,6 +115,30 @@ impl Template {
         };
 
         Ok(Some(RelativePathBuf::from(value)))
+    }
+
+    /// Render as a path.
+    pub fn render_as_path(
+        &self,
+        root: &Path,
+        base_dirs: Option<&BaseDirs>,
+        facts: &Facts,
+        environment: impl Environment,
+    ) -> Result<Option<PathBuf>, Error> {
+        let value = match self.render(facts, environment)? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        let base = if self.home {
+            base_dirs
+                .ok_or_else(|| format_err!("base dirs are required for home directory"))?
+                .home_dir()
+        } else {
+            root
+        };
+
+        Ok(Some(RelativePath::new(&value).to_path(base)))
     }
 
     /// Render the template variable.
@@ -155,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_parse_template() {
-        let t = Template::parse("root/{foo}/$HOME/bar.yaml").unwrap();
+        let t = Template::parse("home:root/{foo}/$HOME/bar.yaml").unwrap();
 
         assert_eq!(
             t.parts,
@@ -167,6 +201,8 @@ mod tests {
                 Static("/bar.yaml".to_string()),
             ]
         );
+
+        assert!(t.home);
 
         let facts = Facts::new(vec![("foo".to_string(), "baz".to_string())]);
 
