@@ -3,6 +3,7 @@
 use failure::{bail, Error};
 use std::borrow::Cow;
 use std::ffi::OsStr;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -20,6 +21,11 @@ impl<'a> Command<'a> {
             name: name.into(),
             working_directory: None,
         }
+    }
+
+    /// The name of the command to run.
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     fn command<S>(&self, args: impl IntoIterator<Item = S>) -> process::Command
@@ -109,7 +115,7 @@ impl<'a> Command<'a> {
     pub fn run_status<S>(
         &self,
         args: impl IntoIterator<Item = S>,
-    ) -> Result<process::ExitStatus, Error>
+    ) -> Result<process::ExitStatus, io::Error>
     where
         S: AsRef<OsStr>,
     {
