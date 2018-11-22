@@ -1,7 +1,7 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use crate::{hierarchy::Data, packages::Packages};
-use failure::{format_err, Error, Fail, ResultExt};
+use crate::{hierarchy::Data, packages::Packages, state::State};
+use failure::{bail, format_err, Error, Fail, ResultExt};
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -37,12 +37,13 @@ impl UnitAllocator {
 }
 
 /// All inputs for a system.
-#[derive(Clone, Copy)]
-pub struct UnitInput<'a> {
+pub struct UnitInput<'a, 's> {
     /// Primary package manager.
     pub packages: Option<&'a Packages>,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
+    /// Unit-local state.
+    pub state: &'s mut State,
 }
 
 /// A single unit of work.
@@ -52,6 +53,9 @@ pub enum Unit {
     CopyFile(CopyFile),
     CreateDir(CreateDir),
     InstallPackages(InstallPackages),
+    Download(Download),
+    AddMode(AddMode),
+    RunOnce(RunOnce),
 }
 
 impl From<CopyFile> for Unit {
@@ -70,6 +74,9 @@ impl Unit {
             CopyFile(unit) => unit.apply(input),
             CreateDir(unit) => unit.apply(input),
             InstallPackages(unit) => unit.apply(input),
+            Download(unit) => unit.apply(input),
+            AddMode(unit) => unit.apply(input),
+            RunOnce(unit) => unit.apply(input),
         }
     }
 }
@@ -236,5 +243,89 @@ impl InstallPackages {
 impl From<InstallPackages> for Unit {
     fn from(value: InstallPackages) -> Unit {
         Unit::InstallPackages(value)
+    }
+}
+
+/// Download the given URL as an executable and write to the given path.
+#[derive(Debug)]
+pub struct Download(pub reqwest::Url, pub PathBuf);
+
+impl Download {
+    fn apply(self, input: UnitInput) -> Result<(), Error> {
+        use std::fs::File;
+        let UnitInput { .. } = input;
+        let Download(url, path) = self;
+        reqwest::get(url)?.copy_to(&mut File::create(&path)?)?;
+        Ok(())
+    }
+}
+
+impl From<Download> for Unit {
+    fn from(value: Download) -> Unit {
+        Unit::Download(value)
+    }
+}
+
+/// Change the permissions of the given file.
+#[derive(Debug)]
+pub struct AddMode(pub PathBuf, pub u32);
+
+impl AddMode {
+    fn apply(self, input: UnitInput) -> Result<(), Error> {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+
+        let UnitInput { .. } = input;
+        let AddMode(path, mode) = self;
+
+        let mut perm = path.metadata()?.permissions();
+        let mode = perm.mode() | mode;
+        perm.set_mode(mode);
+
+        fs::set_permissions(&path, perm)
+            .with_context(|_| format_err!("failed to add mode: {}", path.display()))?;
+
+        Ok(())
+    }
+}
+
+impl From<AddMode> for Unit {
+    fn from(value: AddMode) -> Unit {
+        Unit::AddMode(value)
+    }
+}
+
+/// Run the given executable once.
+#[derive(Debug)]
+pub struct RunOnce(pub String, pub PathBuf);
+
+impl RunOnce {
+    fn apply(self, input: UnitInput) -> Result<(), Error> {
+        use std::process::Command;
+        let UnitInput { state, .. } = input;
+        let RunOnce(id, path) = self;
+
+        log::info!("Running {}", path.display());
+
+        let status = Command::new(&path)
+            .status()
+            .with_context(|_| format_err!("Failed to run: {}", path.display()))?;
+
+        if !status.success() {
+            bail!(
+                "Command `{}` exited with non-zero status: {:?}",
+                path.display(),
+                status
+            );
+        }
+
+        state.touch_once(&id);
+        Ok(())
+    }
+}
+
+impl From<RunOnce> for Unit {
+    fn from(value: RunOnce) -> Unit {
+        Unit::RunOnce(value)
     }
 }

@@ -1,5 +1,5 @@
 use directories::BaseDirs;
-use failure::{format_err, Error};
+use failure::{format_err, Error, ResultExt};
 use log;
 use quickcfg::{
     environment as e,
@@ -11,6 +11,7 @@ use quickcfg::{
     Config, DiskState, FileUtils, Load, Save, State, SystemInput,
 };
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -41,11 +42,18 @@ fn try_main() -> Result<(), Error> {
     }
 
     let state_path = root.join(".state.yml");
+    let state_dir = root.join(".state");
+
+    if !state_dir.is_dir() {
+        fs::create_dir(&state_dir).with_context(|_| {
+            format_err!("failed to create state directory: {}", state_dir.display())
+        })?;
+    }
 
     let config = Config::load(&root.join("quickcfg.yml"))?.unwrap_or_default();
-    let mut state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
+    let state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
 
-    try_apply_config(&opts, &config, &root, &mut state)?;
+    let state = try_apply_config(&opts, &config, &root, &state_dir, state)?;
 
     if let Some(serialized) = state.serialize() {
         log::info!("writing dirty state: {}", state_path.display());
@@ -60,14 +68,15 @@ fn try_apply_config(
     opts: &Opts,
     config: &Config,
     root: &Path,
-    state: &mut State,
-) -> Result<(), Error> {
+    state_dir: &Path,
+    mut state: State,
+) -> Result<State, Error> {
     use rayon::prelude::*;
 
-    if !try_update_config(opts, config, root, state)? {
+    if !try_update_config(opts, config, root, &mut state)? {
         // if we only want to run on updates, exit now.
         if opts.updates_only {
-            return Ok(());
+            return Ok(state);
         }
     }
 
@@ -90,18 +99,7 @@ fn try_apply_config(
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
-    let file_utils = FileUtils::new(&allocator);
-
-    let input = SystemInput {
-        root: &root,
-        base_dirs: base_dirs.as_ref(),
-        facts: &facts,
-        data: &data,
-        packages: packages.as_ref(),
-        environment,
-        allocator: &allocator,
-        file_utils: &file_utils,
-    };
+    let file_utils = FileUtils::new(state_dir, &allocator);
 
     // apply systems in parallel.
     let results = config
@@ -110,7 +108,20 @@ fn try_apply_config(
         .map(|s| {
             let id = s.id();
             let requires = s.requires();
-            s.apply(input).and_then(|s| Ok((id, requires, s)))
+
+            let res = s.apply(SystemInput {
+                root: &root,
+                base_dirs: base_dirs.as_ref(),
+                facts: &facts,
+                data: &data,
+                packages: packages.as_ref(),
+                environment,
+                allocator: &allocator,
+                file_utils: &file_utils,
+                state: &state,
+            });
+
+            res.and_then(|s| Ok((id, requires, s)))
         }).collect::<Result<Vec<_>, Error>>()?;
 
     let mut systems_to_units: HashMap<Option<&str>, UnitId> = HashMap::new();
@@ -156,30 +167,42 @@ fn try_apply_config(
     // dependencies.
     let stages = stage::schedule(all_units)?;
 
-    let input = UnitInput {
-        data: &data,
-        packages: packages.as_ref(),
-    };
-
     for (i, stage) in stages.into_iter().enumerate() {
         log::trace!("stage: #{} ({} unit(s))", i, stage.units.len());
 
         if stage.thread_local {
             for unit in stage.units {
-                unit.apply(input)?;
+                unit.apply(UnitInput {
+                    data: &data,
+                    packages: packages.as_ref(),
+                    state: &mut state,
+                })?;
             }
 
             continue;
         }
 
-        stage
+        let states = stage
             .units
             .into_par_iter()
-            .map(|v| v.apply(input))
-            .collect::<Result<_, Error>>()?;
+            .map(|v| {
+                let mut s = State::default();
+
+                v.apply(UnitInput {
+                    data: &data,
+                    packages: packages.as_ref(),
+                    state: &mut s,
+                })?;
+
+                Ok(s)
+            }).collect::<Result<Vec<State>, Error>>()?;
+
+        for s in states {
+            state.extend(s);
+        }
     }
 
-    Ok(())
+    Ok(state)
 }
 
 /// Try to update config from git.

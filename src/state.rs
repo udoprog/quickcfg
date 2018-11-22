@@ -8,7 +8,11 @@ use std::time::SystemTime;
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 pub struct DiskState {
     /// Last time git was updated.
+    #[serde(default)]
     pub last_update: BTreeMap<String, SystemTime>,
+    /// Things that should only happen once.
+    #[serde(default)]
+    pub once: BTreeMap<String, SystemTime>,
 }
 
 impl DiskState {
@@ -17,6 +21,7 @@ impl DiskState {
         State {
             dirty: false,
             last_update: self.last_update,
+            once: self.once,
         }
     }
 }
@@ -29,6 +34,8 @@ pub struct State {
     pub dirty: bool,
     /// Last time git was updated.
     pub last_update: BTreeMap<String, SystemTime>,
+    /// Things that should only happen once.
+    pub once: BTreeMap<String, SystemTime>,
 }
 
 impl State {
@@ -43,6 +50,29 @@ impl State {
         self.last_update.insert(name.to_string(), SystemTime::now());
     }
 
+    /// Check if the given ID has run once.
+    pub fn has_run_once(&self, id: &str) -> bool {
+        self.once.contains_key(id)
+    }
+
+    /// Mark that something has happened once.
+    pub fn touch_once(&mut self, id: &str) {
+        self.dirty = true;
+        self.once.insert(id.to_string(), SystemTime::now());
+    }
+
+    /// Extend this state with another.
+    pub fn extend(&mut self, other: State) {
+        // nothing to extend.
+        if !other.dirty {
+            return;
+        }
+
+        self.dirty = true;
+        self.last_update.extend(other.last_update);
+        self.once.extend(other.once);
+    }
+
     /// Serialize the state, returning `None` unless it is dirty.
     pub fn serialize(self) -> Option<DiskState> {
         if !self.dirty {
@@ -51,6 +81,7 @@ impl State {
 
         Some(DiskState {
             last_update: self.last_update,
+            once: self.once,
         })
     }
 }

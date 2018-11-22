@@ -15,14 +15,16 @@ struct FileUtilsInner {
 /// Utilities to build units for creating directories.
 pub struct FileUtils<'a> {
     allocator: &'a UnitAllocator,
+    state_dir: PathBuf,
     inner: RwLock<FileUtilsInner>,
 }
 
 impl<'a> FileUtils<'a> {
     /// Create new, thread-safe file utilities.
-    pub fn new(allocator: &'a UnitAllocator) -> FileUtils<'a> {
+    pub fn new(state_dir: &Path, allocator: &'a UnitAllocator) -> FileUtils<'a> {
         FileUtils {
             allocator,
+            state_dir: state_dir.to_owned(),
             inner: RwLock::new(FileUtilsInner {
                 directories: FxHashMap::default(),
                 files: FxHashMap::default(),
@@ -115,5 +117,10 @@ impl<'a> FileUtils<'a> {
         }
 
         Ok(out)
+    }
+
+    /// Get the state path for the given ID.
+    pub fn state_path(&self, id: &str) -> PathBuf {
+        self.state_dir.join(id)
     }
 }

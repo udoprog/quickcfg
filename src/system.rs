@@ -6,6 +6,7 @@ use crate::{
     file_utils::FileUtils,
     hierarchy::Data,
     packages::Packages,
+    state::State,
     unit::{SystemUnit, UnitAllocator},
 };
 use directories::BaseDirs;
@@ -14,9 +15,11 @@ use serde_derive::Deserialize;
 use std::path::Path;
 
 mod copy_dir;
+mod download_and_run;
 mod install_packages;
 
 use self::copy_dir::CopyDir;
+use self::download_and_run::DownloadAndRun;
 use self::install_packages::InstallPackages;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
@@ -26,14 +29,16 @@ pub enum System {
     CopyDir(CopyDir),
     #[serde(rename = "install-packages")]
     InstallPackages(InstallPackages),
+    #[serde(rename = "download-and-run")]
+    DownloadAndRun(DownloadAndRun),
 }
 
 impl System {
-    system_functions![CopyDir, InstallPackages,];
+    system_functions![CopyDir, InstallPackages, DownloadAndRun,];
 }
 
 /// All inputs for a system.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct SystemInput<'a, E>
 where
     E: Copy + e::Environment,
@@ -54,4 +59,6 @@ where
     pub allocator: &'a UnitAllocator,
     /// File utilities.
     pub file_utils: &'a FileUtils<'a>,
+    /// State accessor.
+    pub state: &'a State,
 }
