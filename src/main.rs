@@ -185,10 +185,10 @@ fn try_apply_config(
         let states = stage
             .units
             .into_par_iter()
-            .map(|v| {
+            .map(|unit| {
                 let mut s = State::default();
 
-                v.apply(UnitInput {
+                unit.apply(UnitInput {
                     data: &data,
                     packages: packages.as_ref(),
                     state: &mut s,

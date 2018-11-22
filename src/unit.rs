@@ -65,19 +65,22 @@ impl From<CopyFile> for Unit {
 }
 
 impl Unit {
-    pub fn apply(self, input: UnitInput) -> Result<(), Error> {
+    pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use self::Unit::*;
 
-        match self {
+        let res = match *self {
             // do nothing.
             System => Ok(()),
-            CopyFile(unit) => unit.apply(input),
-            CreateDir(unit) => unit.apply(input),
-            InstallPackages(unit) => unit.apply(input),
-            Download(unit) => unit.apply(input),
-            AddMode(unit) => unit.apply(input),
-            RunOnce(unit) => unit.apply(input),
-        }
+            // do something.
+            CopyFile(ref unit) => unit.apply(input),
+            CreateDir(ref unit) => unit.apply(input),
+            InstallPackages(ref unit) => unit.apply(input),
+            Download(ref unit) => unit.apply(input),
+            AddMode(ref unit) => unit.apply(input),
+            RunOnce(ref unit) => unit.apply(input),
+        };
+
+        Ok(res.with_context(|_| format_err!("Failed to run unit: {:?}", self))?)
     }
 }
 
@@ -107,7 +110,7 @@ impl SystemUnit {
     }
 
     /// Apply the unit of work.
-    pub fn apply(self, input: UnitInput) -> Result<(), Error> {
+    pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
         self.unit.apply(input)
     }
 
@@ -132,11 +135,11 @@ impl SystemUnit {
 pub struct CreateDir(pub PathBuf);
 
 impl CreateDir {
-    fn apply(self, _: UnitInput) -> Result<(), Error> {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
         use std::fs;
-        let CreateDir(dir) = self;
+        let CreateDir(ref dir) = self;
         log::info!("creating dir: {}", dir.display());
-        fs::create_dir(&dir)?;
+        fs::create_dir(dir)?;
         Ok(())
     }
 }
@@ -156,15 +159,15 @@ pub struct CopyFile {
 }
 
 impl CopyFile {
-    fn apply(self, input: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::fs::{self, File};
         use std::io::{self, Write};
 
         let CopyFile {
-            from,
-            to,
+            ref from,
+            ref to,
             templates,
-        } = self;
+        } = *self;
 
         let UnitInput { data, .. } = input;
 
@@ -233,13 +236,13 @@ impl CopyFile {
 pub struct InstallPackages(pub HashSet<String>);
 
 impl InstallPackages {
-    fn apply(self, input: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
         let UnitInput { packages, .. } = input;
 
         let packages = packages
             .ok_or_else(|| format_err!("no package manager available to install packages"))?;
 
-        let InstallPackages(packages_to_install) = self;
+        let InstallPackages(ref packages_to_install) = *self;
 
         let names = packages_to_install
             .iter()
@@ -248,7 +251,7 @@ impl InstallPackages {
             .join(", ");
 
         log::info!("Installing missing packages: {}", names);
-        packages.install_packages(&packages_to_install)
+        packages.install_packages(packages_to_install)
     }
 }
 
@@ -263,11 +266,18 @@ impl From<InstallPackages> for Unit {
 pub struct Download(pub reqwest::Url, pub PathBuf);
 
 impl Download {
-    fn apply(self, input: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::fs::File;
         let UnitInput { .. } = input;
-        let Download(url, path) = self;
-        reqwest::get(url)?.copy_to(&mut File::create(&path)?)?;
+        let Download(ref url, ref path) = *self;
+
+        let mut out = File::create(&path)
+            .with_context(|_| format_err!("Failed to open file: {}", path.display()))?;
+
+        let mut response = reqwest::get(url.clone())
+            .with_context(|_| format_err!("Failed to download URL: {}", url))?;
+
+        response.copy_to(&mut out)?;
         Ok(())
     }
 }
@@ -283,12 +293,12 @@ impl From<Download> for Unit {
 pub struct AddMode(pub PathBuf, pub u32);
 
 impl AddMode {
-    fn apply(self, input: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::fs;
         use std::os::unix::fs::PermissionsExt;
 
         let UnitInput { .. } = input;
-        let AddMode(path, mode) = self;
+        let AddMode(ref path, mode) = *self;
 
         let mut perm = path.metadata()?.permissions();
         let mode = perm.mode() | mode;
@@ -331,11 +341,15 @@ impl RunOnce {
     }
 
     /// Apply the unit.
-    fn apply(self, input: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::process::Command;
         let UnitInput { state, .. } = input;
 
-        let RunOnce { id, path, shell } = self;
+        let RunOnce {
+            ref id,
+            ref path,
+            shell,
+        } = *self;
 
         log::info!("Running {}", path.display());
 

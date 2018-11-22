@@ -59,11 +59,14 @@ macro_rules! system_functions {
         where
             E: Copy + $crate::environment::Environment,
         {
+            use failure::{ResultExt, format_err};
             use self::System::*;
 
-            match *self {
+            let res = match *self {
                 $($name(ref system) => system.apply(input),)*
-            }
+            };
+
+            Ok(res.with_context(|_| format_err!("Failed to run system: {:?}", self))?)
         }
     }
 }
