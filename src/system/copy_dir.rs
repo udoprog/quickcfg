@@ -78,7 +78,7 @@ impl CopyDir {
             if s_m.is_dir() {
                 if should_create_dir(d_m.as_ref())? {
                     let mut unit = allocator.unit(CreateDir(d.to_owned()));
-                    parents.insert(d.to_owned(), unit.id());
+                    parents.insert(d.to_owned(), unit.id);
 
                     if let Some(id) = d.parent().and_then(|p| parents.get(p)) {
                         unit.dependency(*id);

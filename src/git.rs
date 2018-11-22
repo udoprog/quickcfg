@@ -17,6 +17,11 @@ impl Git {
         }
     }
 
+    /// Test if git command works.
+    pub fn test(&self) -> Result<bool, Error> {
+        Ok(self.command.run_status(&["--version"])?.success())
+    }
+
     /// Get the HEAD of the current repository as a commit id.
     pub fn get_head(&self) -> Result<String, Error> {
         Ok(self

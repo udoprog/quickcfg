@@ -1,10 +1,10 @@
 use directories::BaseDirs;
-use failure::{bail, format_err, Error};
+use failure::{format_err, Error};
 use log;
 use quickcfg::{
     environment as e,
     facts::Facts,
-    git, hierarchy, opts, packages,
+    git, hierarchy, opts, packages, stage,
     unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
     Config, DiskState, Load, Save, State, SystemInput,
 };
@@ -97,7 +97,7 @@ fn try_main() -> Result<(), Error> {
         systems_to_units.insert(id, allocator.allocate());
 
         for unit in &units {
-            system_unit.dependency(unit.id());
+            system_unit.dependency(unit.id);
         }
 
         all_units.extend(units);
@@ -123,7 +123,7 @@ fn try_main() -> Result<(), Error> {
     // convert into stages.
     // each stage can independently be run in parallel since it's guaranteed not to have any
     // dependencies.
-    let stages = convert_to_stages(all_units)?;
+    let stages = stage::schedule(all_units)?;
 
     let input = UnitInput {
         data: &data,
@@ -132,6 +132,14 @@ fn try_main() -> Result<(), Error> {
 
     for (i, stage) in stages.into_iter().enumerate() {
         log::trace!("stage: #{} ({} unit(s))", i, stage.units.len());
+
+        if stage.thread_local {
+            for unit in stage.units {
+                unit.apply(input)?;
+            }
+
+            continue;
+        }
 
         stage
             .units
@@ -153,42 +161,40 @@ fn try_main() -> Result<(), Error> {
 /// If opts.updates_only is set, we only want to continue running if we have detected changes in
 /// the configuration.
 fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Result<bool, Error> {
-    let do_update = match state.last_update("git") {
-        Some(last_update) => {
-            let duration = SystemTime::now().duration_since(last_update.clone())?;
-            duration.as_secs() > 10
+    if let Some(last_update) = state.last_update("git") {
+        let duration = SystemTime::now().duration_since(last_update.clone())?;
+
+        if duration.as_secs() < 10 {
+            return Ok(!opts.updates_only);
         }
-        None => true,
     };
 
-    let mut updated = false;
-
-    if do_update {
-        let mut yes = true;
-
-        if !opts.non_interactive {
-            yes = prompt("Do you want to check for updates?")?;
-        }
-
-        if yes {
-            let git = git::Git::new(root);
-
-            if git.needs_update()? {
-                if opts.force {
-                    git.force_update()?;
-                } else {
-                    git.update()?;
-                }
-
-                updated = true;
-            }
-
-            println!("git update");
-            state.touch("git");
+    if !opts.non_interactive {
+        if !prompt("Do you want to check for updates?")? {
+            return Ok(!opts.updates_only);
         }
     }
 
-    Ok(!opts.updates_only || updated)
+    let git = git::Git::new(root);
+
+    if !git.test()? {
+        log::warn!("no working git command found");
+        return Ok(!opts.updates_only);
+    }
+
+    if !git.needs_update()? {
+        return Ok(!opts.updates_only);
+    }
+
+    if opts.force {
+        git.force_update()?;
+    } else {
+        git.update()?;
+    }
+
+    println!("git update");
+    state.touch("git");
+    Ok(true)
 }
 
 /// Prompt for input.
@@ -206,7 +212,7 @@ fn prompt(question: &str) -> Result<bool, Error> {
         input.clear();
         stdin.read_line(&mut input)?;
 
-        match input.as_str().trim() {
+        match input.to_lowercase().as_str().trim() {
             // NB: default.
             "" => return Ok(true),
             "y" | "ye" | "yes" => return Ok(true),
@@ -216,43 +222,4 @@ fn prompt(question: &str) -> Result<bool, Error> {
             }
         }
     }
-}
-
-/// Discrete stages to run.
-struct Stage {
-    units: Vec<SystemUnit>,
-}
-
-/// Convert all units into stages.
-fn convert_to_stages(units: impl IntoIterator<Item = SystemUnit>) -> Result<Vec<Stage>, Error> {
-    use std::collections::HashSet;
-
-    let mut stages = Vec::new();
-    let mut units = units.into_iter().collect::<Vec<_>>();
-    let mut processed = HashSet::new();
-
-    while !units.is_empty() {
-        // ids which have been processed in previous stages.
-        let mut stage = Vec::new();
-        // units which have been processed in _this_ stage.
-        let mut intra = Vec::new();
-
-        for unit in units.drain(..).collect::<Vec<_>>() {
-            if unit.dependencies().iter().all(|d| processed.contains(d)) {
-                intra.push(unit.id());
-                stage.push(unit);
-            } else {
-                units.push(unit);
-            }
-        }
-
-        if stage.is_empty() {
-            bail!("could not convert units to stages");
-        }
-
-        processed.extend(intra);
-        stages.push(Stage { units: stage });
-    }
-
-    Ok(stages)
 }

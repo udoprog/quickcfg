@@ -113,6 +113,13 @@ impl<'a> Command<'a> {
     where
         S: AsRef<OsStr>,
     {
-        Ok(self.command(args).status()?)
+        use std::process::Stdio;
+
+        Ok(self
+            .command(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?)
     }
 }

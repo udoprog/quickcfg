@@ -78,9 +78,11 @@ impl Unit {
 #[derive(Debug)]
 pub struct SystemUnit {
     /// The ID of this unit.
-    id: UnitId,
+    pub id: UnitId,
     /// Dependencies of this unit.
-    depends: Vec<UnitId>,
+    dependencies: Vec<UnitId>,
+    /// Whether the unit needs access to the main thread. For example, for user input.
+    pub thread_local: bool,
     /// The unit of work.
     /// Note: box to make it cheaper to move.
     unit: Box<Unit>,
@@ -91,14 +93,10 @@ impl SystemUnit {
     pub fn new(id: UnitId, unit: impl Into<Unit>) -> Self {
         SystemUnit {
             id,
-            depends: Vec::new(),
+            dependencies: Vec::new(),
+            thread_local: false,
             unit: Box::new(unit.into()),
         }
-    }
-
-    /// Access the ID of this unit.
-    pub fn id(&self) -> UnitId {
-        self.id
     }
 
     /// Apply the unit of work.
@@ -108,12 +106,12 @@ impl SystemUnit {
 
     /// Access dependencies of this unit.
     pub fn dependencies(&self) -> &[UnitId] {
-        &self.depends
+        &self.dependencies
     }
 
     /// Register a dependency.
     pub fn dependency(&mut self, id: UnitId) {
-        self.depends.push(id);
+        self.dependencies.push(id);
     }
 }
 

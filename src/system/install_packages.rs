@@ -50,7 +50,9 @@ impl InstallPackages {
         }
 
         if !packages_to_install.is_empty() {
-            units.push(allocator.unit(unit::InstallPackages(packages_to_install)));
+            let mut unit = allocator.unit(unit::InstallPackages(packages_to_install));
+            unit.thread_local = true;
+            units.push(unit);
         }
 
         return Ok(units);
