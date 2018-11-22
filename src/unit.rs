@@ -84,6 +84,22 @@ impl Unit {
     }
 }
 
+impl fmt::Display for Unit {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use self::Unit::*;
+
+        match *self {
+            System => write!(fmt, "system unit"),
+            CopyFile(ref unit) => unit.fmt(fmt),
+            CreateDir(ref unit) => unit.fmt(fmt),
+            InstallPackages(ref unit) => unit.fmt(fmt),
+            Download(ref unit) => unit.fmt(fmt),
+            AddMode(ref unit) => unit.fmt(fmt),
+            RunOnce(ref unit) => unit.fmt(fmt),
+        }
+    }
+}
+
 /// A system unit, which is a unit coupled with a set of dependencies.
 #[derive(Debug)]
 pub struct SystemUnit {
@@ -96,6 +112,16 @@ pub struct SystemUnit {
     /// The unit of work.
     /// Note: box to make it cheaper to move.
     unit: Box<Unit>,
+}
+
+impl fmt::Display for SystemUnit {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "unit({:03}): {} (depends: {:?})",
+            self.id, self.unit, self.dependencies
+        )
+    }
 }
 
 impl SystemUnit {
@@ -134,6 +160,12 @@ impl SystemUnit {
 #[derive(Debug)]
 pub struct CreateDir(pub PathBuf);
 
+impl fmt::Display for CreateDir {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "create directory {}", self.0.display())
+    }
+}
+
 impl CreateDir {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
         use std::fs;
@@ -156,6 +188,18 @@ pub struct CopyFile {
     pub from: PathBuf,
     pub to: PathBuf,
     pub templates: bool,
+}
+
+impl fmt::Display for CopyFile {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "copy file {} -> {} (template: {})",
+            self.from.display(),
+            self.to.display(),
+            self.templates
+        )
+    }
 }
 
 impl CopyFile {
@@ -235,6 +279,19 @@ impl CopyFile {
 #[derive(Debug)]
 pub struct InstallPackages(pub HashSet<String>);
 
+impl fmt::Display for InstallPackages {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let names = self
+            .0
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        write!(fmt, "install packages: {}", names)
+    }
+}
+
 impl InstallPackages {
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         let UnitInput { packages, .. } = input;
@@ -265,6 +322,12 @@ impl From<InstallPackages> for Unit {
 #[derive(Debug)]
 pub struct Download(pub reqwest::Url, pub PathBuf);
 
+impl fmt::Display for Download {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "download {} to {}", self.0, self.1.display())
+    }
+}
+
 impl Download {
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::fs::File;
@@ -291,6 +354,12 @@ impl From<Download> for Unit {
 /// Change the permissions of the given file.
 #[derive(Debug)]
 pub struct AddMode(pub PathBuf, pub u32);
+
+impl fmt::Display for AddMode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "add mode {} to {}", self.1, self.0.display())
+    }
+}
 
 impl AddMode {
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
@@ -326,6 +395,12 @@ pub struct RunOnce {
     pub path: PathBuf,
     /// Run using a shell.
     pub shell: bool,
+}
+
+impl fmt::Display for RunOnce {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "run `{}` once as `{}`", self.path.display(), self.id)
+    }
 }
 
 impl RunOnce {

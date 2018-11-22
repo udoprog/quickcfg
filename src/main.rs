@@ -7,7 +7,7 @@ use quickcfg::{
     git, hierarchy,
     opts::{self, Opts},
     packages, stage,
-    unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
+    unit::{Unit, UnitAllocator, UnitInput},
     Config, DiskState, FileUtils, Load, Save, State, SystemInput,
 };
 use std::collections::HashMap;
@@ -123,65 +123,88 @@ fn try_apply_config(
             Ok((s, units))
         }).collect::<Result<Vec<_>, Error>>()?;
 
-    let mut systems_to_units: HashMap<Option<&str>, UnitId> = HashMap::new();
-
+    // post-hook for all systems, mapped by id.
+    let mut post_systems = HashMap::new();
     let mut all_units = Vec::new();
-    let mut all_systems = Vec::new();
+    let mut systems_with_requires = Vec::new();
 
-    for (system, units) in results {
-        all_systems.push(system);
+    // Collect all units and map out a unit id to each system that can be used as a dependency.
+    for (system, mut units) in results {
+        if !system.requires().is_empty() {
+            // unit that all contained units depend on.
+            // this is also the unit which we wire up system dependencies from.
+            let pre = allocator.unit(Unit::System);
 
-        let mut system_unit = allocator.unit(Unit::System);
+            for unit in &mut units {
+                unit.add_dependency(pre.id);
+            }
 
-        // allocate all IDs.
-        systems_to_units.insert(system.id(), allocator.allocate());
+            systems_with_requires.push((system, pre));
+        }
 
-        for unit in &units {
-            system_unit.add_dependency(unit.id);
+        if let Some(system_id) = system.id() {
+            // unit that other system can depend on.
+            // this is the unit that other systems depend on.
+            let mut post = allocator.unit(Unit::System);
+
+            // system units depend on all units it contains.
+            post.add_dependencies(units.iter().map(|u| u.id));
+
+            // allocate all IDs.
+            post_systems.insert(system_id, post.id);
+
+            all_units.push(post);
         }
 
         all_units.extend(units);
     }
 
-    for system in all_systems {
-        let unit_id = *systems_to_units
-            .get(&system.id())
-            .ok_or_else(|| format_err!("own id not present"))?;
-
-        let mut unit = SystemUnit::new(unit_id, Unit::System);
-
+    // Wire up systems that have requires.
+    for (system, mut pre) in systems_with_requires {
         for require in system.requires() {
-            let require_id = *systems_to_units
-                .get(&Some(require.as_str()))
-                .ok_or_else(|| format_err!("could not find system with id `{}`", require))?;
+            let require_id = *post_systems
+                .get(require.as_str())
+                .ok_or_else(|| format_err!("Could not find system with id `{}`", require))?;
 
-            unit.add_dependency(require_id);
+            pre.add_dependency(require_id);
         }
 
-        all_units.push(unit);
+        all_units.push(pre);
     }
 
-    // convert into stages.
-    // each stage can independently be run in parallel since it's guaranteed not to have any
-    // dependencies.
-    let stages = stage::schedule(all_units)?;
+    // Schedule all units into stages that can be run independently in parallel.
+    let mut scheduler = stage::Scheduler::new(all_units);
 
-    for (i, stage) in stages.into_iter().enumerate() {
-        log::trace!("stage: #{} ({} unit(s))", i, stage.units.len());
+    let mut errors = Vec::new();
+    let mut i = 0;
+
+    while let Some(stage) = scheduler.stage()? {
+        i += 1;
+
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("Running stage #{} ({} unit(s))", i, stage.units.len());
+
+            for (i, unit) in stage.units.iter().enumerate() {
+                log::trace!("{:2}: {}", i, unit);
+            }
+        }
 
         if stage.thread_local {
             for unit in stage.units {
-                unit.apply(UnitInput {
+                match unit.apply(UnitInput {
                     data: &data,
                     packages: packages.as_ref(),
                     state: &mut state,
-                })?;
+                }) {
+                    Err(e) => errors.push(e),
+                    Ok(()) => scheduler.mark(unit.id),
+                }
             }
 
             continue;
         }
 
-        let states = stage
+        let results = stage
             .units
             .into_par_iter()
             .map(|unit| {
@@ -193,11 +216,17 @@ fn try_apply_config(
                     state: &mut s,
                 })?;
 
-                Ok(s)
-            }).collect::<Result<Vec<State>, Error>>()?;
+                Ok((unit.id, s))
+            }).collect::<Vec<Result<_, Error>>>();
 
-        for s in states {
-            state.extend(s);
+        for res in results {
+            match res {
+                Ok((id, s)) => {
+                    state.extend(s);
+                    scheduler.mark(id);
+                }
+                Err(e) => errors.push(e),
+            }
         }
     }
 
