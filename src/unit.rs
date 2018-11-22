@@ -220,6 +220,7 @@ impl CopyFile {
             let out = render(&from, data).with_context(|_| RenderError(from.to_owned()))?;
             File::create(&to)?.write_all(out.as_bytes())?;
         } else {
+            log::info!("{} -> {}", from.display(), to.display());
             io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
         }
 
