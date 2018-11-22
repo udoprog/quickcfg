@@ -24,6 +24,7 @@ Make sure you have backed everything up before using it!
 * Flexible configuration, but opinionated!
   There are a couple of powerful primitives available (e.g. `copy-dir`), which does _a lot_ of work
   with very little configuration.
+* Hashes dependencies to reduce the amount of work as much as possible.
 
 ## Configuration
 
