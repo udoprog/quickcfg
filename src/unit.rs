@@ -110,8 +110,13 @@ impl SystemUnit {
     }
 
     /// Register a dependency.
-    pub fn dependency(&mut self, id: UnitId) {
+    pub fn add_dependency(&mut self, id: UnitId) {
         self.dependencies.push(id);
+    }
+
+    /// Add a set of dependencies..
+    pub fn add_dependencies(&mut self, ids: impl IntoIterator<Item = UnitId>) {
+        self.dependencies.extend(ids);
     }
 }
 
@@ -122,8 +127,8 @@ pub struct CreateDir(pub PathBuf);
 impl CreateDir {
     fn apply(self, _: UnitInput) -> Result<(), Error> {
         use std::fs;
-
         let CreateDir(dir) = self;
+        log::info!("creating dir: {}", dir.display());
         fs::create_dir(&dir)?;
         Ok(())
     }
@@ -141,7 +146,6 @@ pub struct CopyFile(pub PathBuf, pub PathBuf);
 
 impl CopyFile {
     fn apply(self, input: UnitInput) -> Result<(), Error> {
-        use log::info;
         use std::fs::{self, File};
         use std::io::Write;
 
@@ -151,7 +155,7 @@ impl CopyFile {
 
         let out = render(&from, data).with_context(|_| RenderError(from.to_owned()))?;
 
-        info!("{} -> {}", from.display(), to.display());
+        log::info!("{} -> {}", from.display(), to.display());
         File::create(&to)?.write_all(out.as_bytes())?;
         return Ok(());
 

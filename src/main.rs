@@ -4,9 +4,11 @@ use log;
 use quickcfg::{
     environment as e,
     facts::Facts,
-    git, hierarchy, opts, packages, stage,
+    git, hierarchy,
+    opts::{self, Opts},
+    packages, stage,
     unit::{SystemUnit, Unit, UnitAllocator, UnitId, UnitInput},
-    Config, DiskState, Load, Save, State, SystemInput,
+    Config, DiskState, FileUtils, Load, Save, State, SystemInput,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,8 +29,6 @@ fn main() {
 }
 
 fn try_main() -> Result<(), Error> {
-    use rayon::prelude::*;
-
     pretty_env_logger::init();
 
     let opts = opts::opts()?;
@@ -45,17 +45,39 @@ fn try_main() -> Result<(), Error> {
     let config = Config::load(&root.join("quickcfg.yml"))?.unwrap_or_default();
     let mut state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
 
-    if !update_git_and_test(&opts, &root, &mut state)? {
-        return Ok(());
+    try_apply_config(&opts, &config, &root, &mut state)?;
+
+    if let Some(serialized) = state.serialize() {
+        log::info!("writing dirty state: {}", state_path.display());
+        serialized.save(&state_path)?;
+    }
+
+    Ok(())
+}
+
+/// Internal method to try to apply the given configuration.
+fn try_apply_config(
+    opts: &Opts,
+    config: &Config,
+    root: &Path,
+    state: &mut State,
+) -> Result<(), Error> {
+    use rayon::prelude::*;
+
+    if !try_update_config(opts, config, root, state)? {
+        // if we only want to run on updates, exit now.
+        if opts.updates_only {
+            return Ok(());
+        }
     }
 
     if opts.updates_only {
-        println!("Updates found, running...");
+        log::info!("Updated found, running...");
     }
 
     let facts = Facts::load()?;
     let environment = e::Real;
-    let data = hierarchy::load(&config.hierarchy, &root, &facts, environment)?;
+    let data = hierarchy::load(&config.hierarchy, root, &facts, environment)?;
 
     let packages = packages::Packages::detect(&facts)?;
 
@@ -68,6 +90,7 @@ fn try_main() -> Result<(), Error> {
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
+    let file_utils = FileUtils::new(&allocator);
 
     let input = SystemInput {
         root: &root,
@@ -77,6 +100,7 @@ fn try_main() -> Result<(), Error> {
         packages: packages.as_ref(),
         environment,
         allocator: &allocator,
+        file_utils: &file_utils,
     };
 
     // apply systems in parallel.
@@ -103,7 +127,7 @@ fn try_main() -> Result<(), Error> {
         systems_to_units.insert(id, allocator.allocate());
 
         for unit in &units {
-            system_unit.dependency(unit.id);
+            system_unit.add_dependency(unit.id);
         }
 
         all_units.extend(units);
@@ -120,7 +144,8 @@ fn try_main() -> Result<(), Error> {
             let require_id = *systems_to_units
                 .get(&Some(require.as_str()))
                 .ok_or_else(|| format_err!("could not find system with id `{}`", require))?;
-            unit.dependency(require_id);
+
+            unit.add_dependency(require_id);
         }
 
         all_units.push(unit);
@@ -154,30 +179,31 @@ fn try_main() -> Result<(), Error> {
             .collect::<Result<_, Error>>()?;
     }
 
-    if let Some(serialized) = state.serialize() {
-        log::info!("writing dirty state: {}", state_path.display());
-        serialized.save(&state_path)?;
-    }
-
     Ok(())
 }
 
-/// Try to update git and determine if the command should keep running.
+/// Try to update config from git.
 ///
-/// If opts.updates_only is set, we only want to continue running if we have detected changes in
-/// the configuration.
-fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Result<bool, Error> {
+/// Returns `true` if we have successfully downloaded a new update. `false` otherwise.
+fn try_update_config(
+    opts: &Opts,
+    config: &Config,
+    root: &Path,
+    state: &mut State,
+) -> Result<bool, Error> {
     if let Some(last_update) = state.last_update("git") {
         let duration = SystemTime::now().duration_since(last_update.clone())?;
 
-        if duration.as_secs() < 10 {
-            return Ok(!opts.updates_only);
+        if duration < config.git_refresh {
+            return Ok(false);
         }
+
+        log::info!("{}s since last git update...", duration.as_secs());
     };
 
     if !opts.non_interactive {
         if !prompt("Do you want to check for updates?")? {
-            return Ok(!opts.updates_only);
+            return Ok(false);
         }
     }
 
@@ -185,12 +211,13 @@ fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Res
 
     if !git.test()? {
         log::warn!("no working git command found");
-        return Ok(!opts.updates_only);
+        state.touch("git");
+        return Ok(false);
     }
 
     if !git.needs_update()? {
         state.touch("git");
-        return Ok(!opts.updates_only);
+        return Ok(false);
     }
 
     if opts.force {

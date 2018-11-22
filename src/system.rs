@@ -3,6 +3,7 @@
 use crate::{
     environment as e,
     facts::Facts,
+    file_utils::FileUtils,
     hierarchy::Data,
     packages::Packages,
     unit::{SystemUnit, UnitAllocator},
@@ -51,4 +52,6 @@ where
     pub packages: Option<&'a Packages>,
     /// Unit allocator to use.
     pub allocator: &'a UnitAllocator,
+    /// File utilities.
+    pub file_utils: &'a FileUtils<'a>,
 }

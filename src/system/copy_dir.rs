@@ -1,13 +1,7 @@
-use crate::{
-    environment as e,
-    system::SystemInput,
-    template::Template,
-    unit::{CopyFile, CreateDir, SystemUnit},
-};
+use crate::{environment as e, system::SystemInput, template::Template, unit::SystemUnit};
 use failure::{bail, format_err, Error};
 use relative_path::RelativePathBuf;
 use serde_derive::Deserialize;
-use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -33,7 +27,7 @@ impl CopyDir {
             base_dirs,
             facts,
             environment,
-            allocator,
+            file_utils,
             ..
         } = input;
 
@@ -65,8 +59,6 @@ impl CopyDir {
             }
         };
 
-        let mut parents = HashMap::new();
-
         for e in ignore::WalkBuilder::new(&from).hidden(false).build() {
             let e = e?;
             let s = e.path();
@@ -77,14 +69,7 @@ impl CopyDir {
 
             if s_m.is_dir() {
                 if should_create_dir(d_m.as_ref())? {
-                    let mut unit = allocator.unit(CreateDir(d.to_owned()));
-                    parents.insert(d.to_owned(), unit.id);
-
-                    if let Some(id) = d.parent().and_then(|p| parents.get(p)) {
-                        unit.dependency(*id);
-                    }
-
-                    units.push(unit);
+                    units.extend(file_utils.create_dir_all(&d)?);
                 }
 
                 continue;
@@ -92,13 +77,7 @@ impl CopyDir {
 
             if s_m.is_file() {
                 if should_copy_file(&s_m, d_m.as_ref())? {
-                    let mut unit = allocator.unit(CopyFile(s.to_owned(), d.to_owned()));
-
-                    if let Some(id) = d.parent().and_then(|p| parents.get(p)) {
-                        unit.dependency(*id);
-                    }
-
-                    units.push(unit);
+                    units.push(file_utils.copy_file(&s, &d)?);
                 }
 
                 continue;
