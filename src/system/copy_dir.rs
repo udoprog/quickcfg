@@ -43,7 +43,7 @@ impl CopyDir {
         // resolve destination, if unspecified defaults to relative current directory.
         let to = match self.to.as_ref() {
             Some(to) => match to.render_as_path(root, base_dirs, facts, environment)? {
-                Some(to) => to.canonicalize()?,
+                Some(to) => to,
                 None => return Ok(units),
             },
             None => root.canonicalize()?,
@@ -57,7 +57,14 @@ impl CopyDir {
             let s_m = s.metadata()?;
             let d_m = try_open_meta(&d)?;
 
-            if s_m.is_dir() {
+            let source_type = s_m.file_type();
+
+            // NB: do not copy link.
+            if source_type.is_symlink() {
+                continue;
+            }
+
+            if source_type.is_dir() {
                 if should_create_dir(d_m.as_ref())? {
                     units.extend(file_utils.create_dir_all(&d)?);
                 }
@@ -65,7 +72,7 @@ impl CopyDir {
                 continue;
             }
 
-            if s_m.is_file() {
+            if source_type.is_file() {
                 if should_copy_file(&s_m, d_m.as_ref())? {
                     units.push(file_utils.copy_file(&s, &d, self.templates)?);
                 }

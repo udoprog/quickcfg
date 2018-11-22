@@ -106,10 +106,7 @@ fn try_apply_config(
         .systems
         .par_iter()
         .map(|s| {
-            let id = s.id();
-            let requires = s.requires();
-
-            let res = s.apply(SystemInput {
+            let units = s.apply(SystemInput {
                 root: &root,
                 base_dirs: base_dirs.as_ref(),
                 facts: &facts,
@@ -119,9 +116,9 @@ fn try_apply_config(
                 allocator: &allocator,
                 file_utils: &file_utils,
                 state: &state,
-            });
+            })?;
 
-            res.and_then(|s| Ok((id, requires, s)))
+            Ok((s, units))
         }).collect::<Result<Vec<_>, Error>>()?;
 
     let mut systems_to_units: HashMap<Option<&str>, UnitId> = HashMap::new();
@@ -129,13 +126,13 @@ fn try_apply_config(
     let mut all_units = Vec::new();
     let mut all_systems = Vec::new();
 
-    for (id, requires, units) in results {
-        all_systems.push((id, requires));
+    for (system, units) in results {
+        all_systems.push(system);
 
         let mut system_unit = allocator.unit(Unit::System);
 
         // allocate all IDs.
-        systems_to_units.insert(id, allocator.allocate());
+        systems_to_units.insert(system.id(), allocator.allocate());
 
         for unit in &units {
             system_unit.add_dependency(unit.id);
@@ -144,14 +141,14 @@ fn try_apply_config(
         all_units.extend(units);
     }
 
-    for (id, requires) in all_systems {
+    for system in all_systems {
         let unit_id = *systems_to_units
-            .get(&id)
+            .get(&system.id())
             .ok_or_else(|| format_err!("own id not present"))?;
 
         let mut unit = SystemUnit::new(unit_id, Unit::System);
 
-        for require in requires {
+        for require in system.requires() {
             let require_id = *systems_to_units
                 .get(&Some(require.as_str()))
                 .ok_or_else(|| format_err!("could not find system with id `{}`", require))?;
