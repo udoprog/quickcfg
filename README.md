@@ -36,17 +36,25 @@ hierarchy:
   - db/{distro}.yaml
 
 systems:
-  # system to copy an entire directory to another.
+  # System to copy an entire directory to another.
   - type: copy-dir
     # directory relative to root of this project.
     from: home
     to: home:.
     templates: true
-  # system to ensure that a set of packages are installed.
+  # System to ensure that a set of packages are installed.
   - type: install-packages
     # data key to use when resolving packages
     # will look up this key in the specified hierarchy.
     key: packages
+  # Will download and run the downloaded script once, recording it as done under the provided ID.
+  - type: download-and-run
+    id: install-rust
+    url: https://sh.rustup.rs
+  - type: download-and-run
+    id: install-oh-my-zsh
+    url: https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
+    shell: true
 ```
 
 ## Systems
