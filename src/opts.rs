@@ -3,7 +3,7 @@
 use clap::{App, Arg};
 use failure::Error;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn app() -> App<'static, 'static> {
     App::new("My Super Program")
@@ -19,6 +19,10 @@ fn app() -> App<'static, 'static> {
             Arg::with_name("force")
                 .long("force")
                 .help("When updating configuration, force the update."),
+        ).arg(
+            Arg::with_name("debug")
+                .long("debug")
+                .help("Enable debug logging."),
         ).arg(
             Arg::with_name("non-interactive")
                 .long("non-interactive")
@@ -38,8 +42,9 @@ pub fn opts() -> Result<Opts, Error> {
 
     opts.root = matches.value_of("root").map(PathBuf::from);
     opts.force = matches.is_present("force");
-    opts.non_interactive = matches.is_present("force");
+    opts.non_interactive = matches.is_present("non-interactive");
     opts.updates_only = matches.is_present("updates-only");
+    opts.debug = matches.is_present("debug");
 
     Ok(opts)
 }
@@ -55,6 +60,8 @@ pub struct Opts {
     pub non_interactive: bool,
     /// Only run if there are updates to the repo.
     pub updates_only: bool,
+    /// Enable debug logging.
+    pub debug: bool,
 }
 
 impl Opts {
@@ -62,13 +69,7 @@ impl Opts {
     pub fn root(&self) -> Result<PathBuf, Error> {
         match self.root.as_ref() {
             Some(root) => Ok(root.to_owned()),
-            None => {
-                if let Some(path) = env::args().next() {
-                    Ok(Path::new(&path).canonicalize()?)
-                } else {
-                    Ok(env::current_dir()?)
-                }
-            }
+            None => Ok(env::current_dir()?),
         }
     }
 }

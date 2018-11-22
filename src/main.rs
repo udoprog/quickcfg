@@ -34,9 +34,15 @@ fn try_main() -> Result<(), Error> {
     let opts = opts::opts()?;
     let root = opts.root()?;
 
-    let state_path = root.join(".state");
+    if opts.debug {
+        log::set_max_level(log::LevelFilter::Trace);
+    } else {
+        log::set_max_level(log::LevelFilter::Info);
+    }
 
-    let config = Config::load(&root.join("config.yml"))?.unwrap_or_default();
+    let state_path = root.join(".state.yml");
+
+    let config = Config::load(&root.join("quickcfg.yml"))?.unwrap_or_default();
     let mut state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
 
     if !update_git_and_test(&opts, &root, &mut state)? {
@@ -183,6 +189,7 @@ fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Res
     }
 
     if !git.needs_update()? {
+        state.touch("git");
         return Ok(!opts.updates_only);
     }
 
@@ -192,7 +199,6 @@ fn update_git_and_test(opts: &opts::Opts, root: &Path, state: &mut State) -> Res
         git.update()?;
     }
 
-    println!("git update");
     state.touch("git");
     Ok(true)
 }

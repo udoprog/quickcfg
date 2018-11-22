@@ -22,14 +22,6 @@ impl<'a> Command<'a> {
         }
     }
 
-    /// Configure the working directory of this command.
-    pub fn working_directory<'p>(self, path: impl Into<&'p Path>) -> Self {
-        Command {
-            name: self.name,
-            working_directory: Some(path.into().to_owned()),
-        }
-    }
-
     fn command<S>(&self, args: impl IntoIterator<Item = S>) -> process::Command
     where
         S: AsRef<OsStr>,
@@ -42,6 +34,14 @@ impl<'a> Command<'a> {
         }
 
         cmd
+    }
+
+    /// Configure the working directory of this command.
+    pub fn working_directory<'p>(self, path: impl Into<&'p Path>) -> Self {
+        Command {
+            name: self.name,
+            working_directory: Some(path.into().to_owned()),
+        }
     }
 
     /// Run the given command, inheriting stdout, stderr from the current process.
