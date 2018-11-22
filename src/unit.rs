@@ -222,6 +222,13 @@ impl InstallPackages {
 
         let InstallPackages(packages_to_install) = self;
 
+        let names = packages_to_install
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        log::info!("Installing missing packages: {}", names);
         packages.install_packages(&packages_to_install)
     }
 }

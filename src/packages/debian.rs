@@ -25,6 +25,9 @@ impl Apt {
         let packages = packages.into_iter().collect::<Vec<_>>();
 
         let mut args = Vec::new();
+        args.push(OsStr::new("-p"));
+        args.push(OsStr::new("[sudo] password for %u to install packages: "));
+        args.push(OsStr::new("--"));
         args.push(OsStr::new("apt"));
         args.push(OsStr::new("install"));
         args.push(OsStr::new("-y"));
