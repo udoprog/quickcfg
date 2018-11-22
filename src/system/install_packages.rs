@@ -3,9 +3,9 @@ use crate::{
     system::SystemInput,
     unit::{self, SystemUnit},
 };
-use failure::Error;
+use failure::{format_err, Error};
 use serde_derive::Deserialize;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -31,29 +31,46 @@ impl InstallPackages {
             packages,
             data,
             allocator,
+            state,
             ..
         } = input;
 
         let mut units = Vec::new();
 
-        let (provider, package_manager) = match self.provider.as_ref() {
-            Some(provider) => (Some(provider), packages.get(provider)?),
-            None => (None, packages.default()),
-        };
+        let provider = self.provider.as_ref();
 
-        let mut to_install = HashSet::new();
+        let id = self
+            .id
+            .as_ref()
+            .map(|id| id.to_string())
+            .or_else(|| provider.map(|id| id.to_string()))
+            .or_else(|| packages.default().map(|p| p.name().to_string()))
+            .ok_or_else(|| format_err!("no usable package `id`"))?;
+
+        let mut all_packages = BTreeSet::new();
 
         let key = match provider {
             Some(provider) => format!("{}::{}", provider, self.key),
             None => self.key.to_string(),
         };
 
-        to_install.extend(data.load_or_default::<Vec<String>>(&key)?);
+        all_packages.extend(data.load_or_default::<Vec<String>>(&key)?);
+
+        // test if stored hash is stale.
+        if state.is_hash_fresh(&id, &all_packages)? {
+            log::trace!("Skipping `{}` since hash is fresh", id);
+            return Ok(units);
+        }
+
+        let package_manager = match provider {
+            Some(provider) => packages.get(provider)?,
+            None => packages.default(),
+        };
 
         let package_manager = match package_manager {
             Some(package_manager) => package_manager,
             None => {
-                if !to_install.is_empty() {
+                if !all_packages.is_empty() {
                     return Ok(units);
                 }
 
@@ -70,23 +87,24 @@ impl InstallPackages {
             }
         };
 
+        let mut to_install = all_packages.iter().cloned().collect::<HashSet<_>>();
+
         for package in package_manager.list_packages()? {
             to_install.remove(&package.name);
         }
 
-        if !to_install.is_empty() {
-            let to_install = to_install.into_iter().collect();
+        let to_install = to_install.into_iter().collect();
 
-            let mut unit = allocator.unit(unit::InstallPackages {
-                package_manager,
-                to_install,
-            });
+        let mut unit = allocator.unit(unit::InstallPackages {
+            package_manager,
+            all_packages,
+            to_install,
+            id,
+        });
 
-            // NB: sometimes requires user input.
-            unit.thread_local = true;
-            units.push(unit);
-        }
-
+        // NB: sometimes requires user input.
+        unit.thread_local = true;
+        units.push(unit);
         return Ok(units);
     }
 }

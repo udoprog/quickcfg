@@ -1,8 +1,19 @@
 //! Model for state file.
 
+use failure::Error;
+use fxhash::FxHasher64;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 use std::time::SystemTime;
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+pub struct Hashed {
+    /// The last calculated hash.
+    pub hash: u64,
+    /// When it was last updated.
+    pub updated: SystemTime,
+}
 
 /// The way the state is serialized.
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
@@ -13,6 +24,8 @@ pub struct DiskState {
     /// Things that should only happen once.
     #[serde(default)]
     pub once: BTreeMap<String, SystemTime>,
+    #[serde(default)]
+    pub hashes: BTreeMap<String, Hashed>,
 }
 
 impl DiskState {
@@ -22,6 +35,7 @@ impl DiskState {
             dirty: false,
             last_update: self.last_update,
             once: self.once,
+            hashes: self.hashes,
         }
     }
 }
@@ -36,6 +50,8 @@ pub struct State {
     pub last_update: BTreeMap<String, SystemTime>,
     /// Things that should only happen once.
     pub once: BTreeMap<String, SystemTime>,
+    /// Things that have been tested against a hash.
+    pub hashes: BTreeMap<String, Hashed>,
 }
 
 impl State {
@@ -61,6 +77,36 @@ impl State {
         self.once.insert(id.to_string(), SystemTime::now());
     }
 
+    /// Touch the hashed item.
+    pub fn is_hash_fresh<H: Hash>(&self, id: &str, hash: H) -> Result<bool, Error> {
+        let hashed = match self.hashes.get(id) {
+            Some(hashed) => hashed,
+            None => return Ok(false),
+        };
+
+        let mut state = FxHasher64::default();
+        hash.hash(&mut state);
+        Ok(hashed.hash == state.finish())
+    }
+
+    /// Touch the hashed item.
+    pub fn touch_hash<H: Hash>(&mut self, id: &str, hash: H) -> Result<(), Error> {
+        let mut state = FxHasher64::default();
+        hash.hash(&mut state);
+
+        self.dirty = true;
+
+        self.hashes.insert(
+            id.to_string(),
+            Hashed {
+                hash: state.finish(),
+                updated: SystemTime::now(),
+            },
+        );
+
+        Ok(())
+    }
+
     /// Extend this state with another.
     pub fn extend(&mut self, other: State) {
         // nothing to extend.
@@ -82,6 +128,7 @@ impl State {
         Some(DiskState {
             last_update: self.last_update,
             once: self.once,
+            hashes: self.hashes,
         })
     }
 }

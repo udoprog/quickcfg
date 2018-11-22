@@ -2,6 +2,7 @@
 
 use crate::{hierarchy::Data, packages, packages::PackageManager, state::State};
 use failure::{bail, format_err, Error, Fail, ResultExt};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -280,26 +281,41 @@ impl CopyFile {
 #[derive(Debug)]
 pub struct InstallPackages {
     pub package_manager: Arc<dyn PackageManager>,
+    pub all_packages: BTreeSet<String>,
     pub to_install: Vec<String>,
+    pub id: String,
 }
 
 impl fmt::Display for InstallPackages {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.to_install.is_empty() {
+            return write!(fmt, "install packages");
+        }
+
         let names = self.to_install.join(", ");
         write!(fmt, "install packages: {}", names)
     }
 }
 
 impl InstallPackages {
-    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
+        let UnitInput { state, .. } = input;
+
         let InstallPackages {
             ref package_manager,
+            ref all_packages,
             ref to_install,
+            ref id,
         } = *self;
 
-        let names = to_install.join(", ");
-        log::info!("Installing packages: {}", names);
-        package_manager.install_packages(to_install)
+        if !to_install.is_empty() {
+            let names = to_install.join(", ");
+            log::info!("Installing packages: {}", names);
+            package_manager.install_packages(to_install)?;
+        }
+
+        state.touch_hash(id, &all_packages)?;
+        Ok(())
     }
 }
 
