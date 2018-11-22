@@ -30,7 +30,9 @@ fn main() {
 }
 
 fn try_main() -> Result<(), Error> {
-    pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()?
+        .parse("trace")
+        .init();
 
     let opts = opts::opts()?;
     let root = opts.root()?;
@@ -46,7 +48,7 @@ fn try_main() -> Result<(), Error> {
 
     if !state_dir.is_dir() {
         fs::create_dir(&state_dir).with_context(|_| {
-            format_err!("failed to create state directory: {}", state_dir.display())
+            format_err!("Failed to create state directory: {}", state_dir.display())
         })?;
     }
 
@@ -56,7 +58,7 @@ fn try_main() -> Result<(), Error> {
     let state = try_apply_config(&opts, &config, &root, &state_dir, state)?;
 
     if let Some(serialized) = state.serialize() {
-        log::info!("writing dirty state: {}", state_path.display());
+        log::info!("Writing dirty state: {}", state_path.display());
         serialized.save(&state_path)?;
     }
 
