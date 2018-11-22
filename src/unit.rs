@@ -149,21 +149,33 @@ impl From<CreateDir> for Unit {
 
 /// The configuration for a unit to copy a single file.
 #[derive(Debug)]
-pub struct CopyFile(pub PathBuf, pub PathBuf);
+pub struct CopyFile {
+    pub from: PathBuf,
+    pub to: PathBuf,
+    pub templates: bool,
+}
 
 impl CopyFile {
     fn apply(self, input: UnitInput) -> Result<(), Error> {
         use std::fs::{self, File};
-        use std::io::Write;
+        use std::io::{self, Write};
 
-        let CopyFile(from, to) = self;
+        let CopyFile {
+            from,
+            to,
+            templates,
+        } = self;
 
         let UnitInput { data, .. } = input;
 
-        let out = render(&from, data).with_context(|_| RenderError(from.to_owned()))?;
+        if templates {
+            log::info!("{} -> {} (template)", from.display(), to.display());
+            let out = render(&from, data).with_context(|_| RenderError(from.to_owned()))?;
+            File::create(&to)?.write_all(out.as_bytes())?;
+        } else {
+            io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
+        }
 
-        log::info!("{} -> {}", from.display(), to.display());
-        File::create(&to)?.write_all(out.as_bytes())?;
         return Ok(());
 
         fn render(from: &Path, data: &Data) -> Result<String, Error> {
@@ -297,17 +309,45 @@ impl From<AddMode> for Unit {
 
 /// Run the given executable once.
 #[derive(Debug)]
-pub struct RunOnce(pub String, pub PathBuf);
+pub struct RunOnce {
+    /// ID to mark once run.
+    pub id: String,
+    /// Path to run.
+    pub path: PathBuf,
+    /// Run using a shell.
+    pub shell: bool,
+}
 
 impl RunOnce {
+    const BIN_SH: &'static str = "/bin/sh";
+
+    /// Construct a new RunOnce.
+    pub fn new(id: String, path: PathBuf) -> RunOnce {
+        RunOnce {
+            id,
+            path,
+            shell: false,
+        }
+    }
+
+    /// Apply the unit.
     fn apply(self, input: UnitInput) -> Result<(), Error> {
         use std::process::Command;
         let UnitInput { state, .. } = input;
-        let RunOnce(id, path) = self;
+
+        let RunOnce { id, path, shell } = self;
 
         log::info!("Running {}", path.display());
 
-        let status = Command::new(&path)
+        let mut cmd = if shell {
+            let mut cmd = Command::new(Self::BIN_SH);
+            cmd.arg(&path);
+            cmd
+        } else {
+            Command::new(&path)
+        };
+
+        let status = cmd
             .status()
             .with_context(|_| format_err!("Failed to run: {}", path.display()))?;
 

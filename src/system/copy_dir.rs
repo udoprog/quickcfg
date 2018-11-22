@@ -13,6 +13,8 @@ system_struct! {
         pub to: Option<Template>,
         #[serde(default)]
         pub to_home: bool,
+        #[serde(default)]
+        pub templates: bool,
     }
 }
 
@@ -77,7 +79,7 @@ impl CopyDir {
 
             if s_m.is_file() {
                 if should_copy_file(&s_m, d_m.as_ref())? {
-                    units.push(file_utils.copy_file(&s, &d)?);
+                    units.push(file_utils.copy_file(&s, &d, self.templates)?);
                 }
 
                 continue;

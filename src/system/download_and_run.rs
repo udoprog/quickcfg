@@ -10,6 +10,8 @@ use serde_derive::Deserialize;
 system_struct! {
     DownloadAndRun {
         pub url: String,
+        #[serde(default)]
+        pub shell: bool,
     }
 }
 
@@ -53,7 +55,9 @@ impl DownloadAndRun {
         add_mode.add_dependencies(download.as_ref().map(|d| d.id));
 
         // Run the downloaded file.
-        let mut run = allocator.unit(RunOnce(id.to_string(), path.to_owned()));
+        let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
+        run_once.shell = self.shell;
+        let mut run = allocator.unit(run_once);
         run.add_dependency(add_mode.id);
         run.thread_local = true;
 

@@ -33,15 +33,17 @@ impl<'a> FileUtils<'a> {
     }
 
     /// Set up the unit to copy a file.
-    pub fn copy_file(&self, from: &Path, to: &Path) -> Result<SystemUnit, Error> {
+    pub fn copy_file(&self, from: &Path, to: &Path, templates: bool) -> Result<SystemUnit, Error> {
         let mut inner = self
             .inner
             .write()
             .map_err(|_| format_err!("lock poisoned"))?;
 
-        let mut unit = self
-            .allocator
-            .unit(CopyFile(from.to_owned(), to.to_owned()));
+        let mut unit = self.allocator.unit(CopyFile {
+            from: from.to_owned(),
+            to: to.to_owned(),
+            templates,
+        });
 
         if let Some(parent) = to.parent() {
             unit.add_dependencies(inner.directories.get(parent).cloned());
