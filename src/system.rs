@@ -5,7 +5,7 @@ use crate::{
     facts::Facts,
     file_utils::FileUtils,
     hierarchy::Data,
-    packages::Packages,
+    packages,
     state::State,
     unit::{SystemUnit, UnitAllocator},
 };
@@ -54,7 +54,7 @@ where
     /// Source of environment variables.
     pub environment: E,
     /// Detected primary package manager for the system.
-    pub packages: Option<&'a Packages>,
+    pub packages: &'a packages::Provider,
     /// Unit allocator to use.
     pub allocator: &'a UnitAllocator,
     /// File utilities.

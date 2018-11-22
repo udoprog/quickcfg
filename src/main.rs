@@ -90,13 +90,7 @@ fn try_apply_config(
     let environment = e::Real;
     let data = hierarchy::load(&config.hierarchy, root, &facts, environment)?;
 
-    let packages = packages::Packages::detect(&facts)?;
-
-    if let Some(packages) = packages.as_ref() {
-        log::trace!("detected package manager: {}", packages.name());
-    } else {
-        log::warn!("no package manager detected");
-    }
+    let packages = packages::detect(&facts)?;
 
     let allocator = UnitAllocator::default();
 
@@ -113,7 +107,7 @@ fn try_apply_config(
                 base_dirs: base_dirs.as_ref(),
                 facts: &facts,
                 data: &data,
-                packages: packages.as_ref(),
+                packages: &packages,
                 environment,
                 allocator: &allocator,
                 file_utils: &file_utils,
@@ -193,7 +187,7 @@ fn try_apply_config(
             for unit in stage.units {
                 match unit.apply(UnitInput {
                     data: &data,
-                    packages: packages.as_ref(),
+                    packages: &packages,
                     state: &mut state,
                 }) {
                     Err(e) => errors.push(e),
@@ -212,7 +206,7 @@ fn try_apply_config(
 
                 unit.apply(UnitInput {
                     data: &data,
-                    packages: packages.as_ref(),
+                    packages: &packages,
                     state: &mut s,
                 })?;
 

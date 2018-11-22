@@ -1,8 +1,7 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use crate::{hierarchy::Data, packages::Packages, state::State};
+use crate::{hierarchy::Data, packages, state::State};
 use failure::{bail, format_err, Error, Fail, ResultExt};
-use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -39,7 +38,7 @@ impl UnitAllocator {
 /// All inputs for a system.
 pub struct UnitInput<'a, 's> {
     /// Primary package manager.
-    pub packages: Option<&'a Packages>,
+    pub packages: &'a packages::Provider,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
     /// Unit-local state.
@@ -278,17 +277,11 @@ impl CopyFile {
 
 /// Install a number of packages.
 #[derive(Debug)]
-pub struct InstallPackages(pub HashSet<String>);
+pub struct InstallPackages(pub Vec<String>);
 
 impl fmt::Display for InstallPackages {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let names = self
-            .0
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-
+        let names = self.0.join(", ");
         write!(fmt, "install packages: {}", names)
     }
 }
@@ -298,16 +291,12 @@ impl InstallPackages {
         let UnitInput { packages, .. } = input;
 
         let packages = packages
+            .default()
             .ok_or_else(|| format_err!("no package manager available to install packages"))?;
 
         let InstallPackages(ref packages_to_install) = *self;
 
-        let names = packages_to_install
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-
+        let names = packages_to_install.join(", ");
         log::info!("Installing missing packages: {}", names);
         packages.install_packages(packages_to_install)
     }

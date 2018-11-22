@@ -6,59 +6,81 @@ mod debian;
 
 use crate::facts::{self, Facts};
 use failure::Error;
+use fxhash::FxHashMap;
 use log::warn;
-use std::ffi::OsStr;
-
-/// Package abstraction.
-#[derive(Debug)]
-pub enum Packages {
-    Debian(debian::Packages),
-}
+use std::sync::Arc;
 
 /// Information about an installed package.
 pub struct Package {
     pub name: String,
 }
 
-impl Packages {
-    /// Detect which package provider to use.
-    pub fn detect(facts: &Facts) -> Result<Option<Packages>, Error> {
-        let distro = match facts.get(facts::DISTRO) {
-            // NB: unsupported distro, good luck!
-            None => return Ok(None),
-            Some(distro) => distro,
-        };
+/// A provider of package managers.
+pub struct Provider {
+    by_name: FxHashMap<String, Arc<dyn PackageManager>>,
+    default: Option<Arc<dyn PackageManager>>,
+}
 
-        match distro {
-            "debian" => Ok(Some(Packages::Debian(debian::Packages::new()))),
-            distro => {
-                warn!("no package integration for distro: {}", distro);
-                Ok(None)
-            }
+impl Provider {
+    /// Access the default package manager if it is available.
+    pub fn default(&self) -> Option<&dyn PackageManager> {
+        self.default.as_ref().map(|p| &**p)
+    }
+
+    /// Look up a package manager by name.
+    pub fn get(&self, name: &str) -> Option<&dyn PackageManager> {
+        self.by_name.get(name).map(|p| &**p)
+    }
+}
+
+/// Detect which package provider to use.
+pub fn detect(facts: &Facts) -> Result<Provider, Error> {
+    let mut managers = Vec::new();
+    managers.extend(by_distro(facts)?);
+
+    let by_name = managers
+        .iter()
+        .map(|p| (p.name().to_string(), Arc::clone(p)))
+        .collect::<FxHashMap<_, _>>();
+    let default = managers
+        .iter()
+        .filter(|p| p.primary())
+        .map(|p| Arc::clone(p))
+        .next();
+
+    Ok(Provider { by_name, default })
+}
+
+/// Detect package manager by distro.
+fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
+    let distro = match facts.get(facts::DISTRO) {
+        // NB: unsupported distro, good luck!
+        None => return Ok(None),
+        Some(distro) => distro,
+    };
+
+    match distro {
+        "debian" => Ok(Some(Arc::new(debian::PackageManager::new()))),
+        distro => {
+            warn!("no package integration for distro: {}", distro);
+            Ok(None)
         }
+    }
+}
+
+/// The trait that describes a package manager.
+pub trait PackageManager: Sync + Send {
+    /// Is this a primary package manager?
+    fn primary(&self) -> bool {
+        false
     }
 
     /// Get the name of the current package manager.
-    pub fn name(&self) -> &str {
-        match *self {
-            Packages::Debian(..) => "debian",
-        }
-    }
+    fn name(&self) -> &str;
 
     /// List all packages on this system.
-    pub fn list_packages(&self) -> Result<Vec<Package>, Error> {
-        match *self {
-            Packages::Debian(ref p) => p.list_packages(),
-        }
-    }
+    fn list_packages(&self) -> Result<Vec<Package>, Error>;
 
     /// Install the given packages.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        match *self {
-            Packages::Debian(ref p) => p.install_packages(packages),
-        }
-    }
+    fn install_packages(&self, packages: &[String]) -> Result<(), Error>;
 }

@@ -85,29 +85,35 @@ impl DpkgQuery {
 
 /// Packages abstraction for Debian.
 #[derive(Debug)]
-pub struct Packages {
+pub struct PackageManager {
     dpkg_query: DpkgQuery,
     apt: Apt,
 }
 
-impl Packages {
+impl PackageManager {
+    /// Construct a new debian package manager.
     pub fn new() -> Self {
-        Packages {
+        PackageManager {
             dpkg_query: DpkgQuery::new(),
             apt: Apt::new(),
         }
     }
+}
 
-    /// List all packages on this system.
-    pub fn list_packages(&self) -> Result<Vec<Package>, Error> {
+impl super::PackageManager for PackageManager {
+    fn primary(&self) -> bool {
+        true
+    }
+
+    fn name(&self) -> &str {
+        "debian"
+    }
+
+    fn list_packages(&self) -> Result<Vec<Package>, Error> {
         self.dpkg_query.list_installed()
     }
 
-    /// List all the packages which are installed.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
-    where
-        S: AsRef<OsStr>,
-    {
+    fn install_packages(&self, packages: &[String]) -> Result<(), Error> {
         self.apt.install_packages(packages)
     }
 }
