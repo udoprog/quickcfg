@@ -6,7 +6,6 @@ use crate::{
 use failure::Error;
 use serde_derive::Deserialize;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -37,8 +36,8 @@ impl InstallPackages {
 
         let mut units = Vec::new();
 
-        let (provider, packages) = match self.provider.as_ref() {
-            Some(provider) => (Some(provider), packages.get(provider)),
+        let (provider, package_manager) = match self.provider.as_ref() {
+            Some(provider) => (Some(provider), packages.get(provider)?),
             None => (None, packages.default()),
         };
 
@@ -51,8 +50,8 @@ impl InstallPackages {
 
         to_install.extend(data.load_or_default::<Vec<String>>(&key)?);
 
-        let packages = match packages {
-            Some(packages) => packages,
+        let package_manager = match package_manager {
+            Some(package_manager) => package_manager,
             None => {
                 if !to_install.is_empty() {
                     return Ok(units);
@@ -71,13 +70,19 @@ impl InstallPackages {
             }
         };
 
-        for package in packages.list_packages()? {
+        for package in package_manager.list_packages()? {
             to_install.remove(&package.name);
         }
 
         if !to_install.is_empty() {
             let to_install = to_install.into_iter().collect();
-            let mut unit = allocator.unit(unit::InstallPackages(Arc::clone(packages), to_install));
+
+            let mut unit = allocator.unit(unit::InstallPackages {
+                package_manager,
+                to_install,
+            });
+
+            // NB: sometimes requires user input.
             unit.thread_local = true;
             units.push(unit);
         }

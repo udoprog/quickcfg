@@ -278,22 +278,28 @@ impl CopyFile {
 
 /// Install a number of packages.
 #[derive(Debug)]
-pub struct InstallPackages(pub Arc<dyn PackageManager>, pub Vec<String>);
+pub struct InstallPackages {
+    pub package_manager: Arc<dyn PackageManager>,
+    pub to_install: Vec<String>,
+}
 
 impl fmt::Display for InstallPackages {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let names = self.1.join(", ");
+        let names = self.to_install.join(", ");
         write!(fmt, "install packages: {}", names)
     }
 }
 
 impl InstallPackages {
-    fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        let UnitInput { .. } = input;
-        let InstallPackages(ref packages, ref packages_to_install) = *self;
-        let names = packages_to_install.join(", ");
-        log::info!("Installing missing packages: {}", names);
-        packages.install_packages(packages_to_install)
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        let InstallPackages {
+            ref package_manager,
+            ref to_install,
+        } = *self;
+
+        let names = to_install.join(", ");
+        log::info!("Installing packages: {}", names);
+        package_manager.install_packages(to_install)
     }
 }
 

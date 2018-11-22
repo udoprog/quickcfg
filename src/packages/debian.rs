@@ -3,10 +3,12 @@
 use crate::{command, packages::Package};
 use failure::{format_err, Error};
 use std::ffi::OsStr;
+use std::io;
 
 #[derive(Debug)]
 pub struct Apt {
     sudo: command::Command<'static>,
+    apt: command::Command<'static>,
 }
 
 impl Apt {
@@ -14,6 +16,19 @@ impl Apt {
     pub fn new() -> Self {
         Apt {
             sudo: command::Command::new("sudo"),
+            apt: command::Command::new("apt"),
+        }
+    }
+
+    /// Test that the command is available.
+    pub fn test(&self) -> Result<bool, Error> {
+        match self.apt.run_status(&["--version"]) {
+            Ok(status) => Ok(status.success()),
+            Err(e) => match e.kind() {
+                // no such command.
+                io::ErrorKind::NotFound => Ok(false),
+                _ => Err(Error::from(e)),
+            },
         }
     }
 
@@ -97,6 +112,11 @@ impl PackageManager {
             dpkg_query: DpkgQuery::new(),
             apt: Apt::new(),
         }
+    }
+
+    /// Test that we have everything we need.
+    pub fn test(&self) -> Result<bool, Error> {
+        self.apt.test()
     }
 }
 

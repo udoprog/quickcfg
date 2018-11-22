@@ -6,8 +6,7 @@ mod debian;
 mod python;
 
 use crate::facts::{self, Facts};
-use failure::Error;
-use fxhash::FxHashMap;
+use failure::{bail, Error};
 use log::warn;
 use std::fmt;
 use std::sync::Arc;
@@ -19,71 +18,36 @@ pub struct Package {
 
 /// A provider of package managers.
 pub struct Provider {
-    by_name: FxHashMap<String, Arc<dyn PackageManager>>,
     default: Option<Arc<dyn PackageManager>>,
 }
 
 impl Provider {
     /// Access the default package manager if it is available.
-    pub fn default(&self) -> Option<&Arc<dyn PackageManager>> {
-        self.default.as_ref()
+    pub fn default(&self) -> Option<Arc<dyn PackageManager>> {
+        self.default.as_ref().map(Arc::clone)
     }
 
     /// Look up a package manager by name.
-    pub fn get(&self, name: &str) -> Option<&Arc<dyn PackageManager>> {
-        self.by_name.get(name)
+    pub fn get(&self, name: &str) -> Result<Option<Arc<dyn PackageManager>>, Error> {
+        if let Some(default) = self.default.as_ref() {
+            if default.name() == name {
+                return Ok(Some(Arc::clone(default)));
+            }
+        }
+
+        match name {
+            "debian" => test_debian(),
+            "pip" => test_python("pip"),
+            "pip3" => test_python("pip3"),
+            _ => bail!("No package manager provider for `{}`", name),
+        }
     }
 }
 
 /// Detect which package provider to use.
 pub fn detect(facts: &Facts) -> Result<Provider, Error> {
-    use rayon::prelude::*;
-
-    let mut tests: Vec<Test> = Vec::new();
-
-    // The various tests to perform.
-    tests.push(Test::Distro(facts));
-    tests.push(Test::Python("pip"));
-    tests.push(Test::Python("pip3"));
-
-    // Test in parallel.
-    let managers = tests
-        .into_par_iter()
-        .map(Test::apply)
-        .flat_map(|res| match res {
-            Ok(Some(p)) => Some(Ok(p)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        }).collect::<Result<Vec<_>, Error>>()?;
-
-    let by_name = managers
-        .iter()
-        .map(|p| (p.name().to_string(), Arc::clone(p)))
-        .collect::<FxHashMap<_, _>>();
-
-    let default = managers
-        .iter()
-        .filter(|p| p.primary())
-        .map(|p| Arc::clone(p))
-        .next();
-
-    return Ok(Provider { by_name, default });
-
-    // A test for a package manager that can run in parallel.
-    pub enum Test<'a> {
-        Distro(&'a Facts),
-        Python(&'static str),
-    }
-
-    impl<'a> Test<'a> {
-        /// Apply the test.
-        fn apply(self) -> Result<Option<Arc<dyn PackageManager>>, Error> {
-            match self {
-                Test::Distro(facts) => by_distro(facts),
-                Test::Python(name) => test_python(name),
-            }
-        }
-    }
+    let default = by_distro(facts)?;
+    return Ok(Provider { default });
 }
 
 /// Detect package manager by distro.
@@ -95,12 +59,23 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
     };
 
     match distro {
-        "debian" => Ok(Some(Arc::new(debian::PackageManager::new()))),
+        "debian" => test_debian(),
         distro => {
             warn!("no package integration for distro: {}", distro);
             Ok(None)
         }
     }
+}
+
+/// Verify that we have access to everything we need for debian.
+fn test_debian() -> Result<Option<Arc<dyn PackageManager>>, Error> {
+    let debian = debian::PackageManager::new();
+
+    if !debian.test()? {
+        bail!("Not a supported Debian environment");
+    }
+
+    Ok(Some(Arc::new(debian)))
 }
 
 /// Try to detect existing python package managers.
