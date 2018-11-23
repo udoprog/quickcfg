@@ -186,11 +186,19 @@ Any template file can make use of hierarchy data, by specifying their dependenci
 a `quickcfg:` tag at the top of the file, like this:
 
 ```
-# quickcfg: name
+# quickcfg: name, hobbies:array
+
 Hi, my name is {{name}}
+
+My hobbies are:
+{{#each hobbies}}
+- {{this}}
+{{/#each}}
 ```
 
-`quickcfg` will scan the first 5 lines of any file being copied for this.
+This will load the `name` and `hobbies` variables out of the [`hierarchy`].
+`hobbies` will be loaded as an array, causing all values in the hierarchy for that value to be
+loaded.
 
 [`copy-dir`]: #copy-dir
 [`handlebars`]: https://handlebarsjs.com/
