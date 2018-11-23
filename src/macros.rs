@@ -54,6 +54,7 @@ macro_rules! system_functions {
         }
 
         /// Apply changes for this system.
+        #[allow(unused)]
         pub fn apply<E>(&self, input: $crate::system::SystemInput<E>)
             -> Result<Vec<$crate::system::SystemUnit>, Error>
         where

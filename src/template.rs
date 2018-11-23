@@ -6,10 +6,20 @@ use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Base {
+    /// Path is interpreted as a verbatim path.
+    None,
+    /// The configuration root.
+    Root,
+    /// The current users home directory.
+    Home,
+}
+
 /// A loaded template string.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Template {
-    home: bool,
+    base: Base,
     parts: Vec<TemplatePart>,
 }
 
@@ -27,11 +37,16 @@ pub enum TemplatePart {
 impl Template {
     /// Parse a template string, with variables delimited with `{var}`.
     pub fn parse(mut input: &str) -> Result<Template, Error> {
-        let mut home = false;
+        let mut base = Base::None;
 
-        if input.starts_with("home:") {
-            home = true;
-            input = &input[5..];
+        if let Some(index) = input.find(":") {
+            match &input[..index] {
+                "home" => base = Base::Home,
+                "root" => base = Base::Root,
+                base => bail!("unsupported base `{}`", base),
+            }
+
+            input = &input[index + 1..];
         }
 
         let mut parts = Vec::new();
@@ -67,7 +82,7 @@ impl Template {
             parts.push(TemplatePart::Static(input[start..].to_string()));
         }
 
-        return Ok(Template { home, parts });
+        return Ok(Template { base, parts });
 
         fn var<'s>(
             input: &'s str,
@@ -130,12 +145,16 @@ impl Template {
             None => return Ok(None),
         };
 
-        let base = if self.home {
-            base_dirs
+        let base = match self.base {
+            Base::Home => base_dirs
                 .ok_or_else(|| format_err!("base dirs are required for home directory"))?
-                .home_dir()
-        } else {
-            root
+                .home_dir(),
+            Base::Root => root,
+            Base::None => {
+                let mut buf = PathBuf::new();
+                buf.extend(RelativePath::new(&value).components().map(|c| c.as_str()));
+                return Ok(Some(buf));
+            }
         };
 
         Ok(Some(RelativePath::new(&value).to_path(base)))
@@ -183,7 +202,7 @@ impl<'de> de::Deserialize<'de> for Template {
 #[cfg(test)]
 mod tests {
     use self::TemplatePart::*;
-    use super::{Template, TemplatePart};
+    use super::{Template, TemplatePart, Base};
     use crate::{environment, facts::Facts};
     use std::collections::HashMap;
 
@@ -202,7 +221,7 @@ mod tests {
             ]
         );
 
-        assert!(t.home);
+        assert_eq!(t.base, Base::Home);
 
         let facts = Facts::new(vec![("foo".to_string(), "baz".to_string())]);
 

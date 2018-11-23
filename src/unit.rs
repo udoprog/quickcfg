@@ -52,17 +52,12 @@ pub struct UnitInput<'a, 's, 'c: 's> {
 pub enum Unit {
     System,
     CopyFile(CopyFile),
+    Symlink(Symlink),
     CreateDir(CreateDir),
     InstallPackages(InstallPackages),
     Download(Download),
     AddMode(AddMode),
     RunOnce(RunOnce),
-}
-
-impl From<CopyFile> for Unit {
-    fn from(value: CopyFile) -> Unit {
-        Unit::CopyFile(value)
-    }
 }
 
 impl Unit {
@@ -74,6 +69,7 @@ impl Unit {
             System => Ok(()),
             // do something.
             CopyFile(ref unit) => unit.apply(input),
+            Symlink(ref unit) => unit.apply(input),
             CreateDir(ref unit) => unit.apply(input),
             InstallPackages(ref unit) => unit.apply(input),
             Download(ref unit) => unit.apply(input),
@@ -92,6 +88,7 @@ impl fmt::Display for Unit {
         match *self {
             System => write!(fmt, "system unit"),
             CopyFile(ref unit) => unit.fmt(fmt),
+            Symlink(ref unit) => unit.fmt(fmt),
             CreateDir(ref unit) => unit.fmt(fmt),
             InstallPackages(ref unit) => unit.fmt(fmt),
             Download(ref unit) => unit.fmt(fmt),
@@ -259,6 +256,48 @@ impl CopyFile {
                 }
             }
         }
+    }
+}
+
+impl From<CopyFile> for Unit {
+    fn from(value: CopyFile) -> Unit {
+        Unit::CopyFile(value)
+    }
+}
+
+/// The configuration for a unit to create a symlink.
+#[derive(Debug)]
+pub struct Symlink {
+    pub path: PathBuf,
+    pub link: PathBuf,
+}
+
+impl fmt::Display for Symlink {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "link file {} -> {}",
+            self.path.display(),
+            self.link.display()
+        )
+    }
+}
+
+impl Symlink {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        use std::os::unix::fs::symlink;
+
+        let Symlink { ref path, ref link } = *self;
+
+        log::info!("linking {} -> {}", path.display(), link.display());
+        symlink(link, path)?;
+        Ok(())
+    }
+}
+
+impl From<Symlink> for Unit {
+    fn from(value: Symlink) -> Unit {
+        Unit::Symlink(value)
     }
 }
 

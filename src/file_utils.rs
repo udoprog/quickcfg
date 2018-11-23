@@ -1,9 +1,11 @@
 //! Thread-safe utilities for creating files and directories.
 //! use std::collections::HashMap;
 //!
-use crate::unit::{CopyFile, CreateDir, SystemUnit, UnitAllocator, UnitId};
+use crate::unit::{CopyFile, CreateDir, Symlink, SystemUnit, UnitAllocator, UnitId};
 use failure::{bail, format_err, Error};
 use fxhash::FxHashMap;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
@@ -33,6 +35,30 @@ impl<'a> FileUtils<'a> {
     }
 
     /// Set up the unit to copy a file.
+    pub fn symlink(&self, path: &Path, link: PathBuf) -> Result<SystemUnit, Error> {
+        let mut inner = self
+            .inner
+            .write()
+            .map_err(|_| format_err!("lock poisoned"))?;
+
+        let mut unit = self.allocator.unit(Symlink {
+            path: path.to_owned(),
+            link,
+        });
+
+        if let Some(parent) = path.parent() {
+            unit.dependencies
+                .extend(inner.directories.get(parent).cloned());
+        }
+
+        if let Some(_) = inner.files.insert(path.to_owned(), unit.id) {
+            bail!("Multiple systems try to modify file: {}", path.display());
+        }
+
+        Ok(unit)
+    }
+
+    /// Set up the unit to copy a file.
     pub fn copy_file(&self, from: &Path, to: &Path, templates: bool) -> Result<SystemUnit, Error> {
         let mut inner = self
             .inner
@@ -51,7 +77,7 @@ impl<'a> FileUtils<'a> {
         }
 
         if let Some(_) = inner.files.insert(to.to_owned(), unit.id) {
-            bail!("multiple systems try to modify file: {}", to.display());
+            bail!("Multiple systems try to modify file: {}", to.display());
         }
 
         Ok(unit)
@@ -126,5 +152,49 @@ impl<'a> FileUtils<'a> {
     /// Get the state path for the given ID.
     pub fn state_path(&self, id: &str) -> PathBuf {
         self.state_dir.join(id)
+    }
+
+    /// Try to open metadata, unless the file does not exist.
+    ///
+    /// If the file does not exist, returns `None`.
+    pub fn try_open_meta(p: &Path) -> Result<Option<fs::Metadata>, Error> {
+        match p.symlink_metadata() {
+            Ok(m) => Ok(Some(m)),
+            Err(e) => match e.kind() {
+                io::ErrorKind::NotFound => Ok(None),
+                _ => bail!("to get metadata: {}: {}", p.display(), e),
+            },
+        }
+    }
+
+    /// Test if we should create the specified symlink.
+    pub fn should_create_symlink(
+        path: &Path,
+        link: &Path,
+        meta: Option<&fs::Metadata>,
+    ) -> Result<bool, Error> {
+        let meta = match meta {
+            Some(meta) => meta,
+            None => return Ok(true),
+        };
+
+        let ty = meta.file_type();
+
+        if !ty.is_symlink() {
+            bail!("File exists but is not a symlink: {}", path.display());
+        }
+
+        let actual_link = fs::read_link(path)?;
+
+        if actual_link != link {
+            bail!(
+                "Symlink exists `{}`, but contains the wrong link `{}`, expected: {}",
+                path.display(),
+                actual_link.display(),
+                link.display(),
+            );
+        }
+
+        Ok(false)
     }
 }

@@ -18,10 +18,12 @@ use std::path::Path;
 mod copy_dir;
 mod download_and_run;
 mod install_packages;
+mod link;
 
 use self::copy_dir::CopyDir;
 use self::download_and_run::DownloadAndRun;
 use self::install_packages::InstallPackages;
+use self::link::Link;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
@@ -32,10 +34,12 @@ pub enum System {
     InstallPackages(InstallPackages),
     #[serde(rename = "download-and-run")]
     DownloadAndRun(DownloadAndRun),
+    #[serde(rename = "link")]
+    Link(Link),
 }
 
 impl System {
-    system_functions![CopyDir, InstallPackages, DownloadAndRun,];
+    system_functions![CopyDir, InstallPackages, DownloadAndRun, Link,];
 }
 
 /// All inputs for a system.
