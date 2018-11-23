@@ -39,15 +39,11 @@ hierarchy:
 systems:
   # System to copy an entire directory to another.
   - type: copy-dir
-    # directory relative to root of this project.
-    from: home
+    from: root:./home
     to: home:.
     templates: true
   # System to ensure that a set of packages are installed.
   - type: install-packages
-    # data key to use when resolving packages
-    # will look up this key in the specified hierarchy.
-    key: packages
   # Will download and run the downloaded script once, recording it as done under the provided ID.
   - type: download-and-run
     id: install-rust
@@ -56,6 +52,10 @@ systems:
     id: install-oh-my-zsh
     url: https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
     shell: true
+  # Create a symlink.
+  - type: link
+    path: home:.vimrc
+    link: .vim/vimrc
 ```
 
 ## Systems
@@ -64,12 +64,67 @@ systems:
 
 Copies a directory recursively.
 
+```yaml
+from: root:./some/dir
+to: home:some/dir
+templates: false
+```
+
+Will copy a directory recursively.
+
 #### `install-packages`
 
 Compares the set of installed packages, with a set of packages from the hierarchy to install and
 installs any that are missing.
 
-Will use `sudo`.
+Will use `sudo` if needed to install packages.
+
+```yaml
+type: install-packages
+# The provider of the package manager to use.
+provider: pip3
+# Hierarchy key to lookup for packages to install.
+key: pip3::packages
+```
+
+The simplest example of this system is the one that uses the primary provider:
+
+```yaml
+systems:
+  - type: install-packages
+```
+
+This will look up packages under the `packages` key and install it using the primary provider for
+the system that you are currently running.
+
+These are the supported providers:
+
+ * `debian`: For Debian-based systems.
+
+#### `download-and-run`
+
+Downloads a script of the internet and runs it once.
+
+```yaml
+type: download-and-run
+id: install-oh-my-zsh
+url: https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
+shell: true
+```
+
+The `id` is to uniquely identify that this system has only been run once.
+
+#### `link`
+
+Creates a symlink.
+
+```
+type: link
+path: home:.vimrc
+link: .vim/vimrc
+```
+
+This creates a symbolic link at `path` which contains whatever is specified in `link`.
 
 ## Packages
 
