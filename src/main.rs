@@ -53,7 +53,10 @@ fn try_main() -> Result<(), Error> {
         })?;
     }
 
-    let config = Config::load(&root.join("quickcfg.yml"))?.unwrap_or_default();
+    let config_path = root.join("quickcfg.yml");
+    let config = Config::load(&config_path)
+        .with_context(|_| format_err!("Failed to load configuration: {}", config_path.display()))?
+        .unwrap_or_default();
     let now = SystemTime::now();
 
     let state = DiskState::load(&state_path)?

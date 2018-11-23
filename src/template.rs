@@ -202,7 +202,7 @@ impl<'de> de::Deserialize<'de> for Template {
 #[cfg(test)]
 mod tests {
     use self::TemplatePart::*;
-    use super::{Template, TemplatePart, Base};
+    use super::{Base, Template, TemplatePart};
     use crate::{environment, facts::Facts};
     use std::collections::HashMap;
 

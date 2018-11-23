@@ -1,6 +1,6 @@
 //! Utilities for reading and writing serde types to and from the filesystem.
 
-use failure::{bail, format_err, Error};
+use failure::{bail, format_err, Error, ResultExt};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use serde_yaml;
@@ -27,12 +27,12 @@ where
             Ok(f) => f,
             Err(e) => match e.kind() {
                 io::ErrorKind::NotFound => return Ok(None),
-                _ => bail!("could not open file: {}", e),
+                _ => bail!("Could not open file: {}", e),
             },
         };
 
         let out: T =
-            serde_yaml::from_reader(f).map_err(|e| format_err!("failed to parse: {}", e))?;
+            serde_yaml::from_reader(f).with_context(|_| format_err!("Failed to parse as YAML"))?;
         Ok(Some(out))
     }
 }
