@@ -1,7 +1,7 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{git::Git, hierarchy::Data, packages, packages::PackageManager, state::State};
-use failure::{bail, format_err, Error, Fail, ResultExt};
+use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -480,7 +480,9 @@ impl RunOnce {
 
     /// Apply the unit.
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        use std::process::Command;
+        use crate::command::Command;
+        use std::ffi::OsStr;
+
         let UnitInput { state, .. } = input;
 
         let RunOnce {
@@ -490,30 +492,27 @@ impl RunOnce {
             ref args,
         } = *self;
 
-        log::info!("Running {}", path.display());
+        log::info!("running {}", path.display());
 
-        let mut cmd = if shell {
-            let mut cmd = Command::new(Self::BIN_SH);
-            cmd.arg(&path);
-            cmd
+        let mut command_args = Vec::new();
+
+        let cmd = if shell {
+            command_args.push(path.as_os_str());
+            Command::new(Self::BIN_SH)
         } else {
             Command::new(&path)
         };
 
         for arg in args {
-            cmd.arg(arg);
+            command_args.push(OsStr::new(arg.as_str()));
         }
 
-        let status = cmd
-            .status()
+        let output = cmd
+            .run(&command_args)
             .with_context(|_| format_err!("Failed to run: {}", path.display()))?;
 
-        if !status.success() {
-            bail!(
-                "Command `{}` exited with non-zero status: {:?}",
-                path.display(),
-                status
-            );
+        if !output.status.success() {
+            return Err(Error::from(output.into_error()));
         }
 
         state.touch_once(&id);

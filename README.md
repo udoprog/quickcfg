@@ -177,7 +177,11 @@ Downloads a script of the internet and runs it once.
 ```yaml
 type: download-and-run
 id: install-oh-my-zsh
+# Url to download the command from.
 url: https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
+# Set to `true` if the downloaded command requires interaction. (default: false)
+interactive: true
+# Set to `true` if the command must be run through a shell (`/bin/sh`). (default: false).
 shell: true
 ```
 

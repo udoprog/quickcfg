@@ -141,6 +141,7 @@ impl<'c> State<'c> {
         self.dirty = true;
         self.last_update.extend(other.last_update);
         self.once.extend(other.once);
+        self.hashes.extend(other.hashes);
     }
 
     /// Serialize the state, returning `None` unless it is dirty.

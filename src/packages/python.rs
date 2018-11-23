@@ -7,7 +7,7 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Pip {
-    command: command::Command<'static>,
+    command: command::Command,
 }
 
 impl Pip {
@@ -20,8 +20,8 @@ impl Pip {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.command.run_status(&["--version"]) {
-            Ok(status) => Ok(status.success()),
+        match self.command.run(&["--version"]) {
+            Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
                 io::ErrorKind::NotFound => Ok(false),
@@ -76,6 +76,7 @@ impl Pip {
 /// Packages abstraction for pip.
 #[derive(Debug)]
 pub struct PackageManager {
+    name: &'static str,
     pip: Pip,
 }
 
@@ -83,6 +84,7 @@ impl PackageManager {
     /// Construct a new pip package manager.
     pub fn new(name: &'static str) -> Self {
         PackageManager {
+            name: name,
             pip: Pip::new(name),
         }
     }
@@ -94,7 +96,7 @@ impl super::PackageManager for PackageManager {
     }
 
     fn name(&self) -> &str {
-        self.pip.command.name()
+        self.name
     }
 
     /// Test if command is available.

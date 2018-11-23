@@ -12,9 +12,12 @@ system_struct! {
     DownloadAndRun {
         #[doc="URL to download."]
         pub url: String,
-        #[doc="Run the command through /bin/sh."]
+        #[doc="Run the command through `/bin/sh`."]
         #[serde(default)]
         pub shell: bool,
+        #[doc="Does the command require interaction."]
+        #[serde(default)]
+        pub interactive: bool,
         #[doc="Arguments to add when running command."]
         #[serde(default)]
         pub args: Vec<Template>,
@@ -78,7 +81,7 @@ impl DownloadAndRun {
 
         let mut run = allocator.unit(run_once);
         run.dependencies.push(Dependency::Unit(add_mode.id));
-        run.thread_local = true;
+        run.thread_local = self.interactive;
 
         units.extend(download);
         units.push(add_mode);

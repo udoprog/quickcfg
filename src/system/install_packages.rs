@@ -97,6 +97,9 @@ impl InstallPackages {
 
         let to_install = to_install.into_iter().collect();
 
+        // thread-local if package manager requires user interaction.
+        let thread_local = package_manager.needs_interaction();
+
         let mut unit = allocator.unit(unit::InstallPackages {
             package_manager,
             all_packages,
@@ -105,7 +108,7 @@ impl InstallPackages {
         });
 
         // NB: sometimes requires user input.
-        unit.thread_local = true;
+        unit.thread_local = thread_local;
         units.push(unit);
         return Ok(units);
     }

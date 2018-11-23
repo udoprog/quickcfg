@@ -7,7 +7,7 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Gem {
-    gem: command::Command<'static>,
+    gem: command::Command,
 }
 
 impl Gem {
@@ -20,8 +20,8 @@ impl Gem {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.gem.run_status(&["--version"]) {
-            Ok(status) => Ok(status.success()),
+        match self.gem.run(&["--version"]) {
+            Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
                 io::ErrorKind::NotFound => Ok(false),

@@ -1,14 +1,15 @@
 //! Git abstraction.
 
 use crate::command;
-use failure::{bail, Error};
 use std::path::{Path, PathBuf};
+use std::io;
+use failure::Error;
 
 /// Helper to interact with a git repository.
 #[derive(Debug)]
 pub struct Git {
     pub path: PathBuf,
-    command: command::Command<'static>,
+    command: command::Command,
 }
 
 impl Git {
@@ -22,7 +23,13 @@ impl Git {
 
     /// Test if git command works.
     pub fn test(&self) -> Result<bool, Error> {
-        Ok(self.command.run_status(&["--version"])?.success())
+        match self.command.run(&["--version"]) {
+            Ok(output) => return Ok(output.status.success()),
+            Err(e) => match e.kind() {
+                io::ErrorKind::NotFound => Ok(false),
+                _ => return Err(e.into()),
+            }
+        }
     }
 
     /// Check if repo needs to be updated.
@@ -30,7 +37,7 @@ impl Git {
         self.command
             .clone()
             .working_directory(self.path.as_path())
-            .run(&["fetch", "origin", "master"])?;
+            .run_checked(&["fetch", "origin", "master"])?;
 
         let remote_head = self.rev_parse("FETCH_HEAD")?;
         let head = self.rev_parse("HEAD")?;
@@ -45,12 +52,13 @@ impl Git {
 
     /// Check if the local repository has not been modified without comitting.
     pub fn is_fresh(&self) -> Result<bool, Error> {
-        Ok(self
+        let output = self
             .command
             .clone()
             .working_directory(self.path.as_path())
-            .run_status(&["diff-index", "--quiet", "HEAD"])?
-            .success())
+            .run(&["diff-index", "--quiet", "HEAD"])?;
+
+        Ok(output.status.success())
     }
 
     /// Force update repo.
@@ -58,7 +66,7 @@ impl Git {
         self.command
             .clone()
             .working_directory(self.path.as_path())
-            .run(&["reset", "--hard", "FETCH_HEAD"])
+            .run_checked(&["reset", "--hard", "FETCH_HEAD"])
     }
 
     /// Update repo.
@@ -66,7 +74,7 @@ impl Git {
         self.command
             .clone()
             .working_directory(self.path.as_path())
-            .run(&["merge", "--ff-only", "FETCH_HEAD"])
+            .run_checked(&["merge", "--ff-only", "FETCH_HEAD"])
     }
 
     /// Clone a remote to the current repo.
@@ -79,11 +87,7 @@ impl Git {
             self.path.as_os_str(),
         ];
 
-        if !self.command.run_status(args)?.success() {
-            bail!("Failed to clone");
-        }
-
-        Ok(())
+        self.command.run_checked(args)
     }
 
     /// Get the HEAD of the current repository as a commit id.
@@ -92,7 +96,7 @@ impl Git {
             .command
             .clone()
             .working_directory(self.path.as_path())
-            .run_out(&["rev-parse", git_ref])?
+            .run_stdout(&["rev-parse", git_ref])?
             .trim()
             .to_string())
     }
@@ -103,7 +107,7 @@ impl Git {
             .command
             .clone()
             .working_directory(self.path.as_path())
-            .run_out(&["merge-base", a, b])?
+            .run_stdout(&["merge-base", a, b])?
             .trim()
             .to_string())
     }

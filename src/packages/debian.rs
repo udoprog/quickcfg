@@ -7,8 +7,8 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Apt {
-    sudo: command::Command<'static>,
-    apt: command::Command<'static>,
+    sudo: command::Command,
+    apt: command::Command,
 }
 
 impl Apt {
@@ -22,8 +22,8 @@ impl Apt {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.apt.run_status(&["--version"]) {
-            Ok(status) => Ok(status.success()),
+        match self.apt.run(&["--version"]) {
+            Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
                 io::ErrorKind::NotFound => Ok(false),
@@ -48,14 +48,14 @@ impl Apt {
         args.push(OsStr::new("-y"));
         args.extend(packages.iter().map(AsRef::as_ref));
 
-        self.sudo.run(args)?;
+        self.sudo.run_inherited(args)?;
         Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct DpkgQuery {
-    dpkg_query: command::Command<'static>,
+    dpkg_query: command::Command,
 }
 
 impl DpkgQuery {
@@ -117,6 +117,11 @@ impl PackageManager {
 
 impl super::PackageManager for PackageManager {
     fn primary(&self) -> bool {
+        true
+    }
+
+    fn needs_interaction(&self) -> bool {
+        // needs interaction because we use `sudo`.
         true
     }
 

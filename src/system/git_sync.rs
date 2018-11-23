@@ -80,19 +80,17 @@ impl GitSync {
         }
 
         if git.path.is_dir() {
-            let mut git_update = allocator.unit(GitUpdate {
+            let git_update = allocator.unit(GitUpdate {
                 id,
                 git,
                 force: opts.force,
             });
 
-            git_update.thread_local = true;
             units.push(git_update);
             return Ok(units);
         }
 
         // Initial clone.
-        // This is not thread_local, we just perform a status check to see if it succeeds or not.
         let parent_dir = match git.path.parent() {
             Some(parent) if !parent.is_dir() => {
                 units.extend(file_utils.create_dir_all(parent)?);

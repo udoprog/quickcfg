@@ -85,6 +85,11 @@ pub trait PackageManager: fmt::Debug + Sync + Send {
         false
     }
 
+    /// Might this package manager require interaction?
+    fn needs_interaction(&self) -> bool {
+        false
+    }
+
     /// Get the name of the current package manager.
     fn name(&self) -> &str;
 

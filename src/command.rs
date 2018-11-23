@@ -1,38 +1,76 @@
 //! Helper to run external commands.
 
-use failure::{bail, Error};
-use std::borrow::Cow;
-use std::ffi::OsStr;
+use failure::{Fail, Error, bail};
+use std::ffi::{OsString, OsStr};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::fmt;
 use std::process;
+use std::path::{Path, PathBuf};
+
+/// The decoded output after running a command.
+pub struct Output {
+    pub status: process::ExitStatus,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl Output {
+    /// Convert output into a formatted error.
+    pub fn into_error(self) -> OutputError {
+        OutputError {
+            status: self.status,
+            stdout: self.stdout,
+            stderr: self.stderr,
+        }
+    }
+}
+
+#[derive(Debug, Fail)]
+pub struct OutputError {
+    pub status: process::ExitStatus,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl fmt::Display for OutputError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(fmt, "process exited with status: {}", self.status)?;
+
+        if !self.stdout.is_empty() {
+            writeln!(fmt, "stdout:")?;
+            self.stdout.fmt(fmt)?;
+        }
+
+        if !self.stdout.is_empty() {
+            writeln!(fmt, "stdout:")?;
+            self.stderr.fmt(fmt)?;
+        }
+
+        Ok(())
+    }
+}
 
 /// A command wrapper that simplifies interaction with external commands.
 #[derive(Debug, Clone)]
-pub struct Command<'a> {
-    name: Cow<'a, str>,
+pub struct Command {
+    name: OsString,
     working_directory: Option<PathBuf>,
 }
 
-impl<'a> Command<'a> {
+impl Command {
     /// Construct a new command wrapper.
-    pub fn new(name: impl Into<Cow<'a, str>>) -> Command<'a> {
+    pub fn new(name: impl AsRef<OsStr>) -> Command {
         Command {
-            name: name.into(),
+            name: name.as_ref().to_owned(),
             working_directory: None,
         }
-    }
-
-    /// The name of the command to run.
-    pub fn name(&self) -> &str {
-        self.name.as_ref()
     }
 
     fn command<S>(&self, args: impl IntoIterator<Item = S>) -> process::Command
     where
         S: AsRef<OsStr>,
     {
-        let mut cmd = process::Command::new(self.name.as_ref());
+        let mut cmd = process::Command::new(&self.name);
         cmd.args(args);
 
         if let Some(working_directory) = self.working_directory.as_ref() {
@@ -50,8 +88,52 @@ impl<'a> Command<'a> {
         }
     }
 
+    /// Run the given command, return all lines printed to stdout on success.
+    pub fn run_lines<S>(&self, args: impl IntoIterator<Item = S>) -> Result<Vec<String>, Error>
+    where
+        S: AsRef<OsStr>,
+    {
+        let lines = self.run_stdout(args)?
+            .split("\n")
+            .map(|s| s.to_string())
+            .collect();
+
+        Ok(lines)
+    }
+
+    /// Run the given command, return a string of all output.
+    pub fn run_stdout<S>(&self, args: impl IntoIterator<Item = S>) -> Result<String, Error>
+    where
+        S: AsRef<OsStr>,
+    {
+        let output = self.run(args)?;
+
+        if !output.status.success() {
+            return Err(Error::from(output.into_error()));
+        }
+
+        Ok(output.stdout)
+    }
+
+    /// Run the given command, only checking for status code and providing diagnostics.
+    pub fn run_checked<S>(&self, args: impl IntoIterator<Item = S>) -> Result<(), Error>
+    where
+        S: AsRef<OsStr>,
+    {
+        let output = self.run(args)?;
+
+        if !output.status.success() {
+            return Err(Error::from(output.into_error()));
+        }
+
+        Ok(())
+    }
+
     /// Run the given command, inheriting stdout, stderr from the current process.
-    pub fn run<S>(&self, args: impl IntoIterator<Item = S>) -> Result<(), Error>
+    ///
+    /// This is discouraged, since it basically requires the command to be running on the main
+    /// thread.
+    pub fn run_inherited<S>(&self, args: impl IntoIterator<Item = S>) -> Result<(), Error>
     where
         S: AsRef<OsStr>,
     {
@@ -69,63 +151,33 @@ impl<'a> Command<'a> {
         Ok(())
     }
 
-    /// Run the given command, return all lines printed to stdout on success.
-    pub fn run_lines<S>(&self, args: impl IntoIterator<Item = S>) -> Result<Vec<String>, Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let mut cmd = self.command(args);
-        let output = cmd.output()?;
-
-        if !output.status.success() {
-            bail!(
-                "Command exited with non-zero status: {:?}: {:?}",
-                cmd,
-                output.status
-            );
-        }
-
-        let lines = std::str::from_utf8(&output.stdout)?
-            .split("\n")
-            .map(|s| s.to_string())
-            .collect();
-        Ok(lines)
-    }
-
     /// Run the given command, return a string of all output.
-    pub fn run_out<S>(&self, args: impl IntoIterator<Item = S>) -> Result<String, Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let mut cmd = self.command(args);
-        let output = cmd.output()?;
-
-        if !output.status.success() {
-            bail!(
-                "Command exited with non-zero status: {:?}: {:?}",
-                cmd,
-                output.status
-            );
-        }
-
-        Ok(std::str::from_utf8(&output.stdout)?.to_string())
-    }
-
-    /// Run the given command, return a string of all output.
-    pub fn run_status<S>(
+    pub fn run<S>(
         &self,
         args: impl IntoIterator<Item = S>,
-    ) -> Result<process::ExitStatus, io::Error>
+    ) -> Result<Output, io::Error>
     where
         S: AsRef<OsStr>,
     {
         use std::process::Stdio;
 
-        Ok(self
+        let output = self
             .command(args)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+
+        let output = Output {
+            status: output.status,
+            stdout: String::from_utf8(output.stdout).map_err(|_| {
+                io::Error::new(io::ErrorKind::Other, "Cannot decode stdout as utf-8")
+            })?,
+            stderr: String::from_utf8(output.stderr).map_err(|_| {
+                io::Error::new(io::ErrorKind::Other, "Cannot decode stderr as utf-8")
+            })?,
+        };
+
+        Ok(output)
     }
 }
