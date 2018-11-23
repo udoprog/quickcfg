@@ -1,5 +1,6 @@
 //! Model for state file.
 
+use crate::config::Config;
 use failure::Error;
 use fxhash::FxHasher64;
 use serde_derive::{Deserialize, Serialize};
@@ -30,12 +31,14 @@ pub struct DiskState {
 
 impl DiskState {
     /// Convert into a state.
-    pub fn to_state(self) -> State {
+    pub fn to_state<'c>(self, config: &'c Config, now: &'c SystemTime) -> State<'c> {
         State {
             dirty: false,
             last_update: self.last_update,
             once: self.once,
             hashes: self.hashes,
+            config,
+            now,
         }
     }
 }
@@ -43,8 +46,8 @@ impl DiskState {
 /// State model.
 /// This keeps track of any changes with the dirty flag, which is an indication whether it should
 /// be serialized or not.
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct State {
+#[derive(Debug, PartialEq, Eq)]
+pub struct State<'c> {
     pub dirty: bool,
     /// Last time git was updated.
     pub last_update: BTreeMap<String, SystemTime>,
@@ -52,11 +55,26 @@ pub struct State {
     pub once: BTreeMap<String, SystemTime>,
     /// Things that have been tested against a hash.
     pub hashes: BTreeMap<String, Hashed>,
+    /// The current configuration.
+    pub config: &'c Config,
+    /// Current timestamp.
+    pub now: &'c SystemTime,
 }
 
-impl State {
+impl<'c> State<'c> {
+    pub fn new(config: &'c Config, now: &'c SystemTime) -> Self {
+        State {
+            dirty: Default::default(),
+            last_update: Default::default(),
+            once: Default::default(),
+            hashes: Default::default(),
+            config,
+            now,
+        }
+    }
+
     /// Get the last update timestamp for the given thing named `name`.
-    pub fn last_update<'a>(&'a self, name: &str) -> Option<&'a SystemTime> {
+    pub fn last_update<'time>(&'time self, name: &str) -> Option<&'time SystemTime> {
         self.last_update.get(name)
     }
 
@@ -86,7 +104,13 @@ impl State {
 
         let mut state = FxHasher64::default();
         hash.hash(&mut state);
-        Ok(hashed.hash == state.finish())
+
+        if hashed.hash != state.finish() {
+            return Ok(false);
+        }
+
+        let age = self.now.duration_since(hashed.updated)?;
+        Ok(age < self.config.package_refresh)
     }
 
     /// Touch the hashed item.

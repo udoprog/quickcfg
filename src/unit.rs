@@ -38,13 +38,13 @@ impl UnitAllocator {
 }
 
 /// All inputs for a system.
-pub struct UnitInput<'a, 's> {
+pub struct UnitInput<'a, 's, 'c: 's> {
     /// Primary package manager.
     pub packages: &'a packages::Provider,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
     /// Unit-local state.
-    pub state: &'s mut State,
+    pub state: &'s mut State<'c>,
 }
 
 /// A single unit of work.

@@ -54,9 +54,13 @@ fn try_main() -> Result<(), Error> {
     }
 
     let config = Config::load(&root.join("quickcfg.yml"))?.unwrap_or_default();
-    let state = DiskState::load(&state_path)?.unwrap_or_default().to_state();
+    let now = SystemTime::now();
 
-    let state = try_apply_config(&opts, &config, &root, &state_dir, state)?;
+    let state = DiskState::load(&state_path)?
+        .unwrap_or_default()
+        .to_state(&config, &now);
+
+    let state = try_apply_config(&opts, &config, &now, &root, &state_dir, state)?;
 
     if let Some(serialized) = state.serialize() {
         log::info!("Writing dirty state: {}", state_path.display());
@@ -67,16 +71,17 @@ fn try_main() -> Result<(), Error> {
 }
 
 /// Internal method to try to apply the given configuration.
-fn try_apply_config(
+fn try_apply_config<'c>(
     opts: &Opts,
-    config: &Config,
+    config: &'c Config,
+    now: &'c SystemTime,
     root: &Path,
     state_dir: &Path,
-    mut state: State,
-) -> Result<State, Error> {
+    mut state: State<'c>,
+) -> Result<State<'c>, Error> {
     use rayon::prelude::*;
 
-    if !try_update_config(opts, config, root, &mut state)? {
+    if !try_update_config(opts, config, now, root, &mut state)? {
         // if we only want to run on updates, exit now.
         if opts.updates_only {
             return Ok(state);
@@ -198,7 +203,7 @@ fn try_apply_config(
             .units
             .into_par_iter()
             .map(|unit| {
-                let mut s = State::default();
+                let mut s = State::new(&config, now);
 
                 unit.apply(UnitInput {
                     data: &data,
@@ -229,11 +234,12 @@ fn try_apply_config(
 fn try_update_config(
     opts: &Opts,
     config: &Config,
+    now: &SystemTime,
     root: &Path,
     state: &mut State,
 ) -> Result<bool, Error> {
     if let Some(last_update) = state.last_update("git") {
-        let duration = SystemTime::now().duration_since(last_update.clone())?;
+        let duration = now.duration_since(last_update.clone())?;
 
         if duration < config.git_refresh {
             return Ok(false);
