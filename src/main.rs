@@ -7,8 +7,8 @@ use quickcfg::{
     git, hierarchy,
     opts::{self, Opts},
     packages, stage,
-    system::{Dependency, SystemInput},
-    unit::{Unit, UnitAllocator, UnitInput},
+    system::{self, SystemInput},
+    unit::{self, Unit, UnitAllocator, UnitInput},
     Config, DiskState, FileUtils, Load, Save, State,
 };
 use std::collections::HashMap;
@@ -156,16 +156,16 @@ fn try_apply_config<'c>(
             let pre = allocator.unit(Unit::System);
 
             for unit in &mut units {
-                unit.dependencies.push(pre.id);
+                unit.dependencies.push(unit::Dependency::Unit(pre.id));
             }
 
-            pre_systems.push((pre, Dependency::Transitive(system.requires())));
+            pre_systems.push((pre, system::Dependency::Transitive(system.requires())));
         }
 
         if let Some(system_id) = system.id() {
             if units.is_empty() {
                 // If system is empty, there is nothing to depend on.
-                post_systems.insert(system_id, Dependency::Transitive(system.requires()));
+                post_systems.insert(system_id, system::Dependency::Transitive(system.requires()));
                 continue;
             }
 
@@ -173,8 +173,9 @@ fn try_apply_config<'c>(
             // This unit finishes _after_ all units in the system have finished.
             // System units depend on all units it contains.
             let mut post = allocator.unit(Unit::System);
-            post.dependencies.extend(units.iter().map(|u| u.id));
-            post_systems.insert(system_id, Dependency::Direct(post.id));
+            post.dependencies
+                .extend(units.iter().map(|u| unit::Dependency::Unit(u.id)));
+            post_systems.insert(system_id, system::Dependency::Direct(post.id));
             all_units.push(post);
         }
 
@@ -217,7 +218,7 @@ fn try_apply_config<'c>(
                     state: &mut state,
                 }) {
                     Ok(()) => {
-                        scheduler.mark(unit.id);
+                        scheduler.mark(unit);
                     }
                     Err(e) => {
                         errors.push((unit, e));
@@ -241,16 +242,16 @@ fn try_apply_config<'c>(
                 });
 
                 match res {
-                    Ok(()) => Ok((unit.id, s)),
+                    Ok(()) => Ok((unit, s)),
                     Err(e) => Err((unit, e)),
                 }
             }).collect::<Vec<Result<_, _>>>();
 
         for res in results {
             match res {
-                Ok((id, s)) => {
+                Ok((unit, s)) => {
                     state.extend(s);
-                    scheduler.mark(id);
+                    scheduler.mark(unit);
                 }
                 Err((unit, e)) => errors.push((unit, e)),
             }

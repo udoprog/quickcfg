@@ -8,6 +8,18 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Dependency {
+    /// Someone providing a file.
+    /// The file is aliased by FileUtils.
+    File(UnitId),
+    /// Someone providing a directory.
+    /// The file is aliased by FileUtils.
+    Dir(UnitId),
+    /// Direct dependency on other unit.
+    Unit(UnitId),
+}
+
 #[derive(Fail, Debug)]
 pub struct RenderError(PathBuf);
 
@@ -103,7 +115,9 @@ pub struct SystemUnit {
     /// The ID of this unit.
     pub id: UnitId,
     /// Dependencies of this unit.
-    pub dependencies: Vec<UnitId>,
+    pub dependencies: Vec<Dependency>,
+    /// Dependencies that this unit provides.
+    pub provides: Vec<Dependency>,
     /// Whether the unit needs access to the main thread. For example, for user input.
     pub thread_local: bool,
     /// The unit of work.
@@ -127,6 +141,7 @@ impl SystemUnit {
         SystemUnit {
             id,
             dependencies: Vec::new(),
+            provides: Vec::new(),
             thread_local: false,
             unit: Box::new(unit.into()),
         }

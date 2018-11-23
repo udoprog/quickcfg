@@ -2,7 +2,7 @@ use crate::{
     environment as e,
     system::SystemInput,
     template::Template,
-    unit::{AddMode, Download, RunOnce, SystemUnit},
+    unit::{AddMode, Dependency, Download, RunOnce, SystemUnit},
 };
 use failure::{format_err, Error};
 use serde_derive::Deserialize;
@@ -62,7 +62,7 @@ impl DownloadAndRun {
         let mut add_mode = allocator.unit(AddMode(path.to_owned(), 0o111));
         add_mode
             .dependencies
-            .extend(download.as_ref().map(|d| d.id));
+            .extend(download.as_ref().map(|d| Dependency::Unit(d.id)));
 
         // Run the downloaded file.
         let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
@@ -77,7 +77,7 @@ impl DownloadAndRun {
         }
 
         let mut run = allocator.unit(run_once);
-        run.dependencies.push(add_mode.id);
+        run.dependencies.push(Dependency::Unit(add_mode.id));
         run.thread_local = true;
 
         units.extend(download);

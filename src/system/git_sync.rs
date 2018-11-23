@@ -75,9 +75,12 @@ impl GitSync {
         let git = Git::new(path.as_path());
 
         if !git.path.is_dir() {
-            let create_dirs = match git.path.parent() {
-                Some(parent) => file_utils.create_dir_all(parent)?,
-                None => vec![],
+            let parent_dir = match git.path.parent() {
+                Some(parent) if !parent.is_dir() => {
+                    units.extend(file_utils.create_dir_all(parent)?);
+                    Some(file_utils.dir_dependency(parent)?)
+                }
+                _ => None,
             };
 
             let mut git_clone = allocator.unit(GitClone {
@@ -86,13 +89,9 @@ impl GitSync {
                 remote: self.remote.to_string(),
             });
 
-            git_clone
-                .dependencies
-                .extend(create_dirs.iter().map(|u| u.id));
+            git_clone.dependencies.extend(parent_dir);
+            git_clone.provides.push(file_utils.dir_dependency(&path)?);
 
-            file_utils.insert_directory(&path, &git_clone)?;
-
-            units.extend(create_dirs);
             units.push(git_clone);
             return Ok(units);
         }

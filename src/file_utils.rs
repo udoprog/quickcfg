@@ -3,7 +3,7 @@
 //!
 use crate::{
     opts::Opts,
-    unit::{CopyFile, CreateDir, Symlink, SystemUnit, UnitAllocator, UnitId},
+    unit::{CopyFile, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId},
 };
 use failure::{bail, format_err, Error};
 use fxhash::FxHashMap;
@@ -12,17 +12,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-struct FileUtilsInner {
-    directories: FxHashMap<PathBuf, UnitId>,
-    files: FxHashMap<PathBuf, UnitId>,
-}
-
 /// Utilities to build units for creating directories.
 pub struct FileUtils<'a> {
     opts: &'a Opts,
     state_dir: PathBuf,
     allocator: &'a UnitAllocator,
-    inner: RwLock<FileUtilsInner>,
+    directories: RwLock<FxHashMap<PathBuf, UnitId>>,
+    files: RwLock<FxHashMap<PathBuf, UnitId>>,
 }
 
 impl<'a> FileUtils<'a> {
@@ -32,42 +28,37 @@ impl<'a> FileUtils<'a> {
             opts,
             allocator,
             state_dir: state_dir.to_owned(),
-            inner: RwLock::new(FileUtilsInner {
-                directories: FxHashMap::default(),
-                files: FxHashMap::default(),
-            }),
+            directories: RwLock::new(FxHashMap::default()),
+            files: RwLock::new(FxHashMap::default()),
         }
     }
 
-    /// Indicate that a file is being modified by a unit.
-    pub fn insert_file(&self, path: &Path, unit: &SystemUnit) -> Result<(), Error> {
-        let mut inner = self
-            .inner
+    /// Access or allocate a file dependency of the given path.
+    pub fn file_dependency(&self, path: &Path) -> Result<Dependency, Error> {
+        let mut files = self
+            .files
             .write()
             .map_err(|_| format_err!("lock poisoned"))?;
 
-        if let Some(_) = inner.files.insert(path.to_owned(), unit.id) {
-            bail!("Multiple systems try to modify file: {}", path.display());
-        }
+        let id = *files
+            .entry(path.to_owned())
+            .or_insert_with(|| self.allocator.allocate());
 
-        Ok(())
+        Ok(Dependency::File(id))
     }
 
-    /// Indicate that a directory is being modified by a unit.
-    pub fn insert_directory(&self, path: &Path, unit: &SystemUnit) -> Result<(), Error> {
-        let mut inner = self
-            .inner
+    /// Access or allocate a directory dependency of the given path.
+    pub fn dir_dependency(&self, path: &Path) -> Result<Dependency, Error> {
+        let mut directories = self
+            .directories
             .write()
             .map_err(|_| format_err!("lock poisoned"))?;
 
-        if let Some(_) = inner.directories.insert(path.to_owned(), unit.id) {
-            bail!(
-                "Multiple systems try to modify directory: {}",
-                path.display()
-            );
-        }
+        let id = *directories
+            .entry(path.to_owned())
+            .or_insert_with(|| self.allocator.allocate());
 
-        Ok(())
+        Ok(Dependency::Dir(id))
     }
 
     /// Try to create a symlink.
@@ -111,30 +102,18 @@ impl<'a> FileUtils<'a> {
             link,
         });
 
-        let mut inner = self
-            .inner
-            .write()
-            .map_err(|_| format_err!("lock poisoned"))?;
-
         if let Some(parent) = path.parent() {
-            unit.dependencies
-                .extend(inner.directories.get(parent).cloned());
+            if !parent.is_dir() {
+                unit.dependencies.push(self.dir_dependency(parent)?);
+            }
         }
 
-        if let Some(_) = inner.files.insert(path.to_owned(), unit.id) {
-            bail!("Multiple systems trying to modify file: {}", path.display());
-        }
-
+        unit.provides.push(self.file_dependency(path)?);
         Ok(Some(unit))
     }
 
     /// Set up the unit to copy a file.
     pub fn copy_file(&self, from: &Path, to: &Path, templates: bool) -> Result<SystemUnit, Error> {
-        let mut inner = self
-            .inner
-            .write()
-            .map_err(|_| format_err!("lock poisoned"))?;
-
         let mut unit = self.allocator.unit(CopyFile {
             from: from.to_owned(),
             to: to.to_owned(),
@@ -142,27 +121,25 @@ impl<'a> FileUtils<'a> {
         });
 
         if let Some(parent) = to.parent() {
-            unit.dependencies
-                .extend(inner.directories.get(parent).cloned());
+            if !parent.is_dir() {
+                unit.dependencies.push(self.dir_dependency(parent)?);
+            }
         }
 
-        if let Some(_) = inner.files.insert(to.to_owned(), unit.id) {
-            bail!("Multiple systems try to modify file: {}", to.display());
-        }
-
+        unit.provides.push(self.file_dependency(to)?);
         Ok(unit)
     }
 
     /// Recursively set up units with dependencies to create the given directories.
     pub fn create_dir_all(&self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
         let dirs = {
-            let inner = self
-                .inner
+            let directories = self
+                .directories
                 .read()
                 .map_err(|_| format_err!("lock poisoned"))?;
 
             // Directory is already being created.
-            if inner.directories.contains_key(dir) {
+            if directories.contains_key(dir) {
                 return Ok(vec![]);
             }
 
@@ -181,7 +158,7 @@ impl<'a> FileUtils<'a> {
                     break;
                 }
 
-                if inner.directories.contains_key(parent) {
+                if directories.contains_key(parent) {
                     break;
                 }
 
@@ -192,8 +169,8 @@ impl<'a> FileUtils<'a> {
             dirs
         };
 
-        let mut inner = self
-            .inner
+        let mut directories = self
+            .directories
             .write()
             .map_err(|_| format_err!("lock poisoned"))?;
 
@@ -201,16 +178,17 @@ impl<'a> FileUtils<'a> {
 
         for dir in dirs.into_iter().rev() {
             // needs to re-check now that we have mutable access.
-            if inner.directories.contains_key(dir) {
+            if directories.contains_key(dir) {
                 continue;
             }
 
             let mut unit = self.allocator.unit(CreateDir(dir.to_owned()));
-            inner.directories.insert(dir.to_owned(), unit.id);
+            directories.insert(dir.to_owned(), unit.id);
+            unit.provides.push(Dependency::Dir(unit.id));
 
             if let Some(parent) = dir.parent() {
                 unit.dependencies
-                    .extend(inner.directories.get(parent).cloned());
+                    .extend(directories.get(parent).cloned().map(Dependency::Dir));
             }
 
             out.push(unit);

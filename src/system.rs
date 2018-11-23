@@ -8,7 +8,7 @@ use crate::{
     opts::Opts,
     packages,
     state::State,
-    unit::{SystemUnit, UnitAllocator, UnitId},
+    unit::{self, SystemUnit, UnitAllocator, UnitId},
 };
 use directories::BaseDirs;
 use failure::Error;
@@ -110,7 +110,7 @@ impl<'a> Dependency<'a> {
     pub fn resolve(
         &self,
         systems: &HashMap<&'a str, Dependency<'a>>,
-    ) -> impl IntoIterator<Item = UnitId> {
+    ) -> impl IntoIterator<Item = unit::Dependency> {
         use std::collections::VecDeque;
 
         let mut ids = Vec::new();
@@ -125,7 +125,7 @@ impl<'a> Dependency<'a> {
                         queue.extend(systems.get(id.as_str()));
                     }
                 }
-                Dependency::Direct(id) => ids.push(id),
+                Dependency::Direct(id) => ids.push(unit::Dependency::Unit(id)),
                 Dependency::None => continue,
             }
         }

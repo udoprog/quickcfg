@@ -1,6 +1,6 @@
 //! Utilities to process a set of units into a set of inter-dependent stages.
 
-use crate::unit::{SystemUnit, UnitId};
+use crate::unit::{Dependency, SystemUnit};
 use failure::Error;
 use std::collections::HashSet;
 
@@ -14,7 +14,7 @@ pub struct Stage {
 /// Scheduler that incrementally schedules stages to be run.
 pub struct Scheduler {
     units: Vec<SystemUnit>,
-    processed: HashSet<UnitId>,
+    provided: HashSet<Dependency>,
     thread_locals: Vec<SystemUnit>,
     stage: Vec<SystemUnit>,
 }
@@ -24,7 +24,7 @@ impl Scheduler {
     pub fn new(units: impl IntoIterator<Item = SystemUnit>) -> Self {
         Scheduler {
             units: units.into_iter().collect::<Vec<_>>(),
-            processed: HashSet::new(),
+            provided: HashSet::new(),
             thread_locals: Vec::new(),
             stage: Vec::new(),
         }
@@ -34,7 +34,7 @@ impl Scheduler {
     pub fn stage(&mut self) -> Result<Option<Stage>, Error> {
         let Scheduler {
             ref mut units,
-            ref processed,
+            ref provided,
             ref mut thread_locals,
             ref mut stage,
         } = *self;
@@ -64,7 +64,7 @@ impl Scheduler {
             let mut next = Vec::new();
 
             for unit in units.drain(..) {
-                if !unit.dependencies.iter().all(|d| processed.contains(d)) {
+                if !unit.dependencies.iter().all(|d| provided.contains(d)) {
                     next.push(unit);
                     continue;
                 }
@@ -85,9 +85,10 @@ impl Scheduler {
     }
 
     /// Mark the specified unit as successfully processed.
-    pub fn mark(&mut self, unit_id: UnitId) {
-        log::trace!("Mark: {}", unit_id);
-        self.processed.insert(unit_id);
+    pub fn mark(&mut self, unit: SystemUnit) {
+        log::trace!("Mark: {}", unit);
+        self.provided.extend(unit.provides.into_iter());
+        self.provided.insert(Dependency::Unit(unit.id));
     }
 
     /// Convert into unscheduled units.
