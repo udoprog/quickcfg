@@ -41,8 +41,8 @@ impl fmt::Display for OutputError {
             self.stdout.fmt(fmt)?;
         }
 
-        if !self.stdout.is_empty() {
-            writeln!(fmt, "stdout:")?;
+        if !self.stderr.is_empty() {
+            writeln!(fmt, "stderr:")?;
             self.stderr.fmt(fmt)?;
         }
 
@@ -159,14 +159,7 @@ impl Command {
     where
         S: AsRef<OsStr>,
     {
-        use std::process::Stdio;
-
-        let output = self
-            .command(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
+        let output = self.command(args).output()?;
 
         let output = Output {
             status: output.status,
