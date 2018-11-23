@@ -44,7 +44,9 @@ impl Pip {
             }
 
             let mut it = line.split(" ");
-            let name = it.next().ok_or_else(|| format_err!("expected status"))?;
+            let name = it
+                .next()
+                .ok_or_else(|| format_err!("expected package name"))?;
 
             out.push(Package {
                 name: name.to_string(),
@@ -84,11 +86,6 @@ impl PackageManager {
             pip: Pip::new(name),
         }
     }
-
-    /// Test if command is available.
-    pub fn test(&self) -> Result<bool, Error> {
-        self.pip.test()
-    }
 }
 
 impl super::PackageManager for PackageManager {
@@ -98,6 +95,11 @@ impl super::PackageManager for PackageManager {
 
     fn name(&self) -> &str {
         self.pip.command.name()
+    }
+
+    /// Test if command is available.
+    fn test(&self) -> Result<bool, Error> {
+        self.pip.test()
     }
 
     fn list_packages(&self) -> Result<Vec<Package>, Error> {

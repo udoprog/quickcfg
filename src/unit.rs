@@ -107,7 +107,7 @@ pub struct SystemUnit {
     /// The ID of this unit.
     pub id: UnitId,
     /// Dependencies of this unit.
-    dependencies: Vec<UnitId>,
+    pub dependencies: Vec<UnitId>,
     /// Whether the unit needs access to the main thread. For example, for user input.
     pub thread_local: bool,
     /// The unit of work.
@@ -139,21 +139,6 @@ impl SystemUnit {
     /// Apply the unit of work.
     pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
         self.unit.apply(input)
-    }
-
-    /// Access dependencies of this unit.
-    pub fn dependencies(&self) -> &[UnitId] {
-        &self.dependencies
-    }
-
-    /// Register a dependency.
-    pub fn add_dependency(&mut self, id: UnitId) {
-        self.dependencies.push(id);
-    }
-
-    /// Add a set of dependencies..
-    pub fn add_dependencies(&mut self, ids: impl IntoIterator<Item = UnitId>) {
-        self.dependencies.extend(ids);
     }
 }
 
@@ -293,7 +278,7 @@ impl fmt::Display for InstallPackages {
         }
 
         let names = self.to_install.join(", ");
-        write!(fmt, "install packages: {}", names)
+        write!(fmt, "{}: install packages: {}", self.id, names)
     }
 }
 
@@ -310,7 +295,7 @@ impl InstallPackages {
 
         if !to_install.is_empty() {
             let names = to_install.join(", ");
-            log::info!("Installing packages: {}", names);
+            log::info!("Installing packages for `{}`: {}", id, names);
             package_manager.install_packages(to_install)?;
         }
 

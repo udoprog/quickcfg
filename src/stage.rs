@@ -64,7 +64,7 @@ impl Scheduler {
             let mut next = Vec::new();
 
             for unit in units.drain(..) {
-                if !unit.dependencies().iter().all(|d| processed.contains(d)) {
+                if !unit.dependencies.iter().all(|d| processed.contains(d)) {
                     next.push(unit);
                     continue;
                 }

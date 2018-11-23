@@ -1,4 +1,4 @@
-//! Packages abstraction for Debian.
+//! Packages abstraction for Ruby.
 
 use crate::{command, packages::Package};
 use failure::{format_err, Error};
@@ -6,23 +6,21 @@ use std::ffi::OsStr;
 use std::io;
 
 #[derive(Debug)]
-pub struct Apt {
-    sudo: command::Command<'static>,
-    apt: command::Command<'static>,
+pub struct Gem {
+    gem: command::Command<'static>,
 }
 
-impl Apt {
-    /// Create a new dpkg-query command wrapper.
+impl Gem {
+    /// Create a new gem command wrapper.
     pub fn new() -> Self {
-        Apt {
-            sudo: command::Command::new("sudo"),
-            apt: command::Command::new("apt"),
+        Gem {
+            gem: command::Command::new("gem"),
         }
     }
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.apt.run_status(&["--version"]) {
+        match self.gem.run_status(&["--version"]) {
             Ok(status) => Ok(status.success()),
             Err(e) => match e.kind() {
                 // no such command.
@@ -40,39 +38,19 @@ impl Apt {
         let packages = packages.into_iter().collect::<Vec<_>>();
 
         let mut args = Vec::new();
-        args.push(OsStr::new("-p"));
-        args.push(OsStr::new("[sudo] password for %u to install packages: "));
-        args.push(OsStr::new("--"));
-        args.push(OsStr::new("apt"));
         args.push(OsStr::new("install"));
-        args.push(OsStr::new("-y"));
+        args.push(OsStr::new("--user-install"));
         args.extend(packages.iter().map(AsRef::as_ref));
 
-        self.sudo.run(args)?;
+        self.gem.run(args)?;
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct DpkgQuery {
-    dpkg_query: command::Command<'static>,
-}
-
-impl DpkgQuery {
-    /// Create a new dpkg-query command wrapper.
-    pub fn new() -> Self {
-        DpkgQuery {
-            dpkg_query: command::Command::new("dpkg-query"),
-        }
     }
 
     /// List all the packages which are installed.
     pub fn list_installed(&self) -> Result<Vec<Package>, Error> {
         let mut out = Vec::new();
 
-        let args = &["-W", "--showformat=${db:Status-Abbrev}${binary:Package}\\n"];
-
-        for line in self.dpkg_query.run_lines(args)? {
+        for line in self.gem.run_lines(&["list", "-q", "-l"])? {
             let line = line.trim();
 
             if line == "" {
@@ -80,14 +58,10 @@ impl DpkgQuery {
             }
 
             let mut it = line.split(" ");
-            let status = it.next().ok_or_else(|| format_err!("expected status"))?;
+
             let name = it
                 .next()
                 .ok_or_else(|| format_err!("expected package name"))?;
-
-            if status != "ii" {
-                continue;
-            }
 
             out.push(Package {
                 name: name.to_string(),
@@ -98,20 +72,16 @@ impl DpkgQuery {
     }
 }
 
-/// Packages abstraction for Debian.
+/// Packages abstraction for Ruby.
 #[derive(Debug)]
 pub struct PackageManager {
-    dpkg_query: DpkgQuery,
-    apt: Apt,
+    gem: Gem,
 }
 
 impl PackageManager {
-    /// Construct a new debian package manager.
+    /// Construct a new ruby package manager.
     pub fn new() -> Self {
-        PackageManager {
-            dpkg_query: DpkgQuery::new(),
-            apt: Apt::new(),
-        }
+        PackageManager { gem: Gem::new() }
     }
 }
 
@@ -121,19 +91,19 @@ impl super::PackageManager for PackageManager {
     }
 
     fn name(&self) -> &str {
-        "debian"
+        "gem"
     }
 
     /// Test that we have everything we need.
     fn test(&self) -> Result<bool, Error> {
-        self.apt.test()
+        self.gem.test()
     }
 
     fn list_packages(&self) -> Result<Vec<Package>, Error> {
-        self.dpkg_query.list_installed()
+        self.gem.list_installed()
     }
 
     fn install_packages(&self, packages: &[String]) -> Result<(), Error> {
-        self.apt.install_packages(packages)
+        self.gem.install_packages(packages)
     }
 }

@@ -52,13 +52,15 @@ impl DownloadAndRun {
 
         // Make the downloaded file executable.
         let mut add_mode = allocator.unit(AddMode(path.to_owned(), 0o111));
-        add_mode.add_dependencies(download.as_ref().map(|d| d.id));
+        add_mode
+            .dependencies
+            .extend(download.as_ref().map(|d| d.id));
 
         // Run the downloaded file.
         let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
         run_once.shell = self.shell;
         let mut run = allocator.unit(run_once);
-        run.add_dependency(add_mode.id);
+        run.dependencies.push(add_mode.id);
         run.thread_local = true;
 
         units.extend(download);

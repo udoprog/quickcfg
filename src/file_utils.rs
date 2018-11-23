@@ -46,7 +46,8 @@ impl<'a> FileUtils<'a> {
         });
 
         if let Some(parent) = to.parent() {
-            unit.add_dependencies(inner.directories.get(parent).cloned());
+            unit.dependencies
+                .extend(inner.directories.get(parent).cloned());
         }
 
         if let Some(_) = inner.files.insert(to.to_owned(), unit.id) {
@@ -112,7 +113,8 @@ impl<'a> FileUtils<'a> {
             inner.directories.insert(dir.to_owned(), unit.id);
 
             if let Some(parent) = dir.parent() {
-                unit.add_dependencies(inner.directories.get(parent).cloned());
+                unit.dependencies
+                    .extend(inner.directories.get(parent).cloned());
             }
 
             out.push(unit);

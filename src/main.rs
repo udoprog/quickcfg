@@ -7,8 +7,9 @@ use quickcfg::{
     git, hierarchy,
     opts::{self, Opts},
     packages, stage,
+    system::{Dependency, SystemInput},
     unit::{Unit, UnitAllocator, UnitInput},
-    Config, DiskState, FileUtils, Load, Save, State, SystemInput,
+    Config, DiskState, FileUtils, Load, Save, State,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -120,33 +121,35 @@ fn try_apply_config(
     // post-hook for all systems, mapped by id.
     let mut post_systems = HashMap::new();
     let mut all_units = Vec::new();
-    let mut systems_with_requires = Vec::new();
+    let mut pre_systems = Vec::new();
 
     // Collect all units and map out a unit id to each system that can be used as a dependency.
     for (system, mut units) in results {
         if !system.requires().is_empty() {
-            // unit that all contained units depend on.
-            // this is also the unit which we wire up system dependencies from.
+            // Unit that all contained units depend on.
+            // This unit finishes _before_ any unit in the system.
             let pre = allocator.unit(Unit::System);
 
             for unit in &mut units {
-                unit.add_dependency(pre.id);
+                unit.dependencies.push(pre.id);
             }
 
-            systems_with_requires.push((system, pre));
+            pre_systems.push((pre, Dependency::Transitive(system.requires())));
         }
 
         if let Some(system_id) = system.id() {
-            // unit that other system can depend on.
-            // this is the unit that other systems depend on.
+            if units.is_empty() {
+                // If system is empty, there is nothing to depend on.
+                post_systems.insert(system_id, Dependency::Transitive(system.requires()));
+                continue;
+            }
+
+            // Unit that other systems depend on.
+            // This unit finishes _after_ all units in the system have finished.
+            // System units depend on all units it contains.
             let mut post = allocator.unit(Unit::System);
-
-            // system units depend on all units it contains.
-            post.add_dependencies(units.iter().map(|u| u.id));
-
-            // allocate all IDs.
-            post_systems.insert(system_id, post.id);
-
+            post.dependencies.extend(units.iter().map(|u| u.id));
+            post_systems.insert(system_id, Dependency::Direct(post.id));
             all_units.push(post);
         }
 
@@ -154,15 +157,8 @@ fn try_apply_config(
     }
 
     // Wire up systems that have requires.
-    for (system, mut pre) in systems_with_requires {
-        for require in system.requires() {
-            let require_id = *post_systems
-                .get(require.as_str())
-                .ok_or_else(|| format_err!("Could not find system with id `{}`", require))?;
-
-            pre.add_dependency(require_id);
-        }
-
+    for (mut pre, depend) in pre_systems {
+        pre.dependencies.extend(depend.resolve(&post_systems));
         all_units.push(pre);
     }
 

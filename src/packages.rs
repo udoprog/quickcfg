@@ -4,6 +4,7 @@
 
 mod debian;
 mod python;
+mod ruby;
 
 use crate::facts::{self, Facts};
 use failure::{bail, Error};
@@ -36,9 +37,10 @@ impl Provider {
         }
 
         match name {
-            "debian" => test_debian(),
-            "pip" => test_python("pip"),
-            "pip3" => test_python("pip3"),
+            "debian" => test(debian::PackageManager::new()),
+            "pip" => test(python::PackageManager::new("pip")),
+            "pip3" => test(python::PackageManager::new("pip3")),
+            "gem" => test(ruby::PackageManager::new()),
             _ => bail!("No package manager provider for `{}`", name),
         }
     }
@@ -59,7 +61,7 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
     };
 
     match distro {
-        "debian" => test_debian(),
+        "debian" => test(debian::PackageManager::new()),
         distro => {
             warn!("no package integration for distro: {}", distro);
             Ok(None)
@@ -67,23 +69,10 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
     }
 }
 
-/// Verify that we have access to everything we need for debian.
-fn test_debian() -> Result<Option<Arc<dyn PackageManager>>, Error> {
-    let debian = debian::PackageManager::new();
-
-    if !debian.test()? {
-        bail!("Not a supported Debian environment");
-    }
-
-    Ok(Some(Arc::new(debian)))
-}
-
 /// Try to detect existing python package managers.
-fn test_python(name: &'static str) -> Result<Option<Arc<dyn PackageManager>>, Error> {
-    let pip = python::PackageManager::new(name);
-
-    if pip.test()? {
-        Ok(Some(Arc::new(pip)))
+fn test(manager: impl PackageManager + 'static) -> Result<Option<Arc<dyn PackageManager>>, Error> {
+    if manager.test()? {
+        Ok(Some(Arc::new(manager)))
     } else {
         Ok(None)
     }
@@ -98,6 +87,9 @@ pub trait PackageManager: fmt::Debug + Sync + Send {
 
     /// Get the name of the current package manager.
     fn name(&self) -> &str;
+
+    /// Test if package manager is usable.
+    fn test(&self) -> Result<bool, Error>;
 
     /// List all packages on this system.
     fn list_packages(&self) -> Result<Vec<Package>, Error>;
