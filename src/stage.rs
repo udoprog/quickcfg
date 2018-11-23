@@ -1,7 +1,7 @@
 //! Utilities to process a set of units into a set of inter-dependent stages.
 
 use crate::unit::{SystemUnit, UnitId};
-use failure::{bail, Error};
+use failure::Error;
 use std::collections::HashSet;
 
 /// Discrete stage to run.
@@ -76,16 +76,22 @@ impl Scheduler {
                 }
             }
 
-            if thread_locals.is_empty() && stage.is_empty() {
-                bail!("Unable to schedule any more units");
-            }
-
             units.extend(next);
+
+            if thread_locals.is_empty() && stage.is_empty() {
+                return Ok(None);
+            }
         }
     }
 
     /// Mark the specified unit as successfully processed.
     pub fn mark(&mut self, unit_id: UnitId) {
+        log::trace!("Mark: {}", unit_id);
         self.processed.insert(unit_id);
+    }
+
+    /// Convert into unscheduled units.
+    pub fn into_unscheduled(self) -> Vec<SystemUnit> {
+        self.units
     }
 }

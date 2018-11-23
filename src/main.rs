@@ -1,5 +1,5 @@
 use directories::BaseDirs;
-use failure::{format_err, Error, ResultExt};
+use failure::{bail, format_err, Error, ResultExt};
 use log;
 use quickcfg::{
     environment as e,
@@ -16,16 +16,31 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
+fn report_error(e: Error) {
+    let mut it = e.iter_chain();
+
+    if let Some(e) = it.next() {
+        eprintln!("{}", e);
+
+        if let Some(bt) = e.backtrace() {
+            eprintln!("{}", bt);
+        }
+    }
+
+    for e in it {
+        eprintln!("Caused by: {}", e);
+
+        if let Some(bt) = e.backtrace() {
+            eprintln!("{}", bt);
+        }
+    }
+}
+
 fn main() {
     use std::process;
 
     if let Err(e) = try_main() {
-        eprintln!("{}", e);
-
-        for cause in e.iter_causes() {
-            eprintln!("Caused by: {}", cause);
-        }
-
+        report_error(e);
         process::exit(1);
     }
 }
@@ -66,7 +81,7 @@ fn try_main() -> Result<(), Error> {
     let state = try_apply_config(&opts, &config, &now, &root, &state_dir, state)?;
 
     if let Some(serialized) = state.serialize() {
-        log::info!("Writing dirty state: {}", state_path.display());
+        log::trace!("Writing state: {}", state_path.display());
         serialized.save(&state_path)?;
     }
 
@@ -121,6 +136,8 @@ fn try_apply_config<'c>(
                 allocator: &allocator,
                 file_utils: &file_utils,
                 state: &state,
+                now: now,
+                opts: opts,
             })?;
 
             Ok((s, units))
@@ -180,7 +197,12 @@ fn try_apply_config<'c>(
         i += 1;
 
         if log::log_enabled!(log::Level::Trace) {
-            log::trace!("Running stage #{} ({} unit(s))", i, stage.units.len());
+            log::trace!(
+                "Running stage #{} ({} unit(s)) (thread_local: {})",
+                i,
+                stage.units.len(),
+                stage.thread_local
+            );
 
             for (i, unit) in stage.units.iter().enumerate() {
                 log::trace!("{:2}: {}", i, unit);
@@ -194,8 +216,12 @@ fn try_apply_config<'c>(
                     packages: &packages,
                     state: &mut state,
                 }) {
-                    Err(e) => errors.push(e),
-                    Ok(()) => scheduler.mark(unit.id),
+                    Ok(()) => {
+                        scheduler.mark(unit.id);
+                    }
+                    Err(e) => {
+                        errors.push((unit, e));
+                    }
                 }
             }
 
@@ -208,14 +234,17 @@ fn try_apply_config<'c>(
             .map(|unit| {
                 let mut s = State::new(&config, now);
 
-                unit.apply(UnitInput {
+                let res = unit.apply(UnitInput {
                     data: &data,
                     packages: &packages,
                     state: &mut s,
-                })?;
+                });
 
-                Ok((unit.id, s))
-            }).collect::<Vec<Result<_, Error>>>();
+                match res {
+                    Ok(()) => Ok((unit.id, s)),
+                    Err(e) => Err((unit, e)),
+                }
+            }).collect::<Vec<Result<_, _>>>();
 
         for res in results {
             match res {
@@ -223,9 +252,32 @@ fn try_apply_config<'c>(
                     state.extend(s);
                     scheduler.mark(id);
                 }
-                Err(e) => errors.push(e),
+                Err((unit, e)) => errors.push((unit, e)),
             }
         }
+    }
+
+    if !errors.is_empty() {
+        for (i, (unit, e)) in errors.into_iter().enumerate() {
+            log::error!("{:2}: {}", i, unit);
+            report_error(e);
+        }
+
+        bail!("Failed to run all units");
+    }
+
+    let unscheduled = scheduler.into_unscheduled();
+
+    if !unscheduled.is_empty() {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("Unable to schedule the following units:");
+
+            for (i, unit) in unscheduled.into_iter().enumerate() {
+                log::trace!("{:2}: {}", i, unit);
+            }
+        }
+
+        bail!("Could not schedule all units");
     }
 
     Ok(state)

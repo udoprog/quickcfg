@@ -1,6 +1,7 @@
 use crate::{
     environment as e,
     system::SystemInput,
+    template::Template,
     unit::{AddMode, Download, RunOnce, SystemUnit},
 };
 use failure::{format_err, Error};
@@ -9,9 +10,14 @@ use serde_derive::Deserialize;
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
     DownloadAndRun {
+        #[doc="URL to download."]
         pub url: String,
+        #[doc="Run the command through /bin/sh."]
         #[serde(default)]
         pub shell: bool,
+        #[doc="Arguments to add when running command."]
+        #[serde(default)]
+        pub args: Vec<Template>,
     }
 }
 
@@ -25,6 +31,8 @@ impl DownloadAndRun {
             allocator,
             file_utils,
             state,
+            facts,
+            environment,
             ..
         } = input;
 
@@ -59,6 +67,15 @@ impl DownloadAndRun {
         // Run the downloaded file.
         let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
         run_once.shell = self.shell;
+
+        for (i, arg) in self.args.iter().enumerate() {
+            let arg = arg
+                .as_string(facts, environment)?
+                .ok_or_else(|| format_err!("Cannot render argument #{}", i))?;
+
+            run_once.args.push(arg);
+        }
+
         let mut run = allocator.unit(run_once);
         run.dependencies.push(add_mode.id);
         run.thread_local = true;

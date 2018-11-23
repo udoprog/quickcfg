@@ -10,8 +10,10 @@ use std::collections::{BTreeSet, HashSet};
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
     InstallPackages {
+        #[doc="Hierarchy key to lookup for packages to install."]
         #[serde(default = "default_key")]
         pub key: String,
+        #[doc="Package provider to use."]
         pub provider: Option<String>,
     }
 }

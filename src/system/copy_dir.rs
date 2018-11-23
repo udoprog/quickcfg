@@ -8,9 +8,12 @@ use std::fs;
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
     CopyDir {
+        #[doc="Where to copy from."]
         pub from: Template,
+        #[doc="Where to copy to."]
         pub to: Option<Template>,
         #[serde(default)]
+        #[doc="If we should treat files as templates."]
         pub templates: bool,
     }
 }
@@ -32,17 +35,14 @@ impl CopyDir {
 
         let mut units = Vec::new();
 
-        let from = match self
-            .from
-            .render_as_path(root, base_dirs, facts, environment)?
-        {
+        let from = match self.from.as_path(root, base_dirs, facts, environment)? {
             Some(from) => from,
             None => return Ok(units),
         };
 
         // resolve destination, if unspecified defaults to relative current directory.
         let to = match self.to.as_ref() {
-            Some(to) => match to.render_as_path(root, base_dirs, facts, environment)? {
+            Some(to) => match to.as_path(root, base_dirs, facts, environment)? {
                 Some(to) => to,
                 None => return Ok(units),
             },

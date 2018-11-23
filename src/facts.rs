@@ -1,5 +1,6 @@
 //! Loading facts about the system that we are currently running on.
 
+use crate::template::Vars;
 use failure::{bail, Error};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -95,5 +96,11 @@ impl Facts {
         Q: Hash + Eq,
     {
         self.0.get(k).map(|s| s.as_str())
+    }
+}
+
+impl<'a> Vars for &'a Facts {
+    fn get(&self, k: &str) -> Option<&str> {
+        Facts::get(self, k)
     }
 }

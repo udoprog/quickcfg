@@ -15,10 +15,7 @@ macro_rules! system_struct {
             /// Things that this system requires.
             pub requires: Vec<String>,
 
-            $(
-            $(#[$attr])*
-            pub $field: $field_ty,
-            )*
+            $($(#[$attr])* pub $field: $field_ty,)*
         }
 
         impl $name {

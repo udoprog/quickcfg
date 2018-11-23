@@ -7,7 +7,9 @@ use serde_derive::Deserialize;
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
     Link {
+        #[doc="Where to create the symlink."]
         pub path: Template,
+        #[doc="Where to point the created symlink."]
         pub link: Template,
     }
 }
@@ -29,18 +31,12 @@ impl Link {
 
         let mut units = Vec::new();
 
-        let path = match self
-            .path
-            .render_as_path(root, base_dirs, facts, environment)?
-        {
+        let path = match self.path.as_path(root, base_dirs, facts, environment)? {
             Some(path) => path,
             None => return Ok(units),
         };
 
-        let link = match self
-            .link
-            .render_as_path(root, base_dirs, facts, environment)?
-        {
+        let link = match self.link.as_path(root, base_dirs, facts, environment)? {
             Some(link) => link,
             None => return Ok(units),
         };
@@ -49,13 +45,9 @@ impl Link {
 
         // try to relativize link.
         let link = if link.is_absolute() {
-            match path
-                .parent()
+            path.parent()
                 .and_then(|p| FileUtils::path_relative_from(&link, p))
-            {
-                Some(link) => link,
-                None => link,
-            }
+                .unwrap_or_else(|| link)
         } else {
             link
         };

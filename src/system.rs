@@ -5,6 +5,7 @@ use crate::{
     facts::Facts,
     file_utils::FileUtils,
     hierarchy::Data,
+    opts::Opts,
     packages,
     state::State,
     unit::{SystemUnit, UnitAllocator, UnitId},
@@ -14,15 +15,18 @@ use failure::Error;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::SystemTime;
 
 mod copy_dir;
 mod download_and_run;
+mod git_sync;
 mod install_packages;
 mod link;
 mod link_dir;
 
 use self::copy_dir::CopyDir;
 use self::download_and_run::DownloadAndRun;
+use self::git_sync::GitSync;
 use self::install_packages::InstallPackages;
 use self::link::Link;
 use self::link_dir::LinkDir;
@@ -40,10 +44,19 @@ pub enum System {
     DownloadAndRun(DownloadAndRun),
     #[serde(rename = "link")]
     Link(Link),
+    #[serde(rename = "git-sync")]
+    GitSync(GitSync),
 }
 
 impl System {
-    system_functions![CopyDir, LinkDir, InstallPackages, DownloadAndRun, Link,];
+    system_functions![
+        CopyDir,
+        LinkDir,
+        InstallPackages,
+        DownloadAndRun,
+        Link,
+        GitSync,
+    ];
 }
 
 /// All inputs for a system.
@@ -70,6 +83,10 @@ where
     pub file_utils: &'a FileUtils<'a>,
     /// State accessor.
     pub state: &'a State<'c>,
+    /// Current time.
+    pub now: &'a SystemTime,
+    /// Current optsion.
+    pub opts: &'a Opts,
 }
 
 /// Helper structure used to resolve dependencies.

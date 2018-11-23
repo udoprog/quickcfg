@@ -1,31 +1,22 @@
 //! Model for template variables.
-use crate::{environment::Environment, facts::Facts};
+use crate::environment::Environment;
 use directories::BaseDirs;
 use failure::{bail, format_err, Error};
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Base {
-    /// Path is interpreted as a verbatim path.
-    Path,
-    /// The configuration root.
-    Root,
-    /// The current users home directory.
-    Home,
-}
-
 /// A loaded template string.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Template {
-    base: Base,
-    parts: Vec<TemplatePart>,
+    parts: Vec<Part>,
 }
 
 /// A single part in a template string.
 #[derive(Debug, PartialEq, Eq)]
-pub enum TemplatePart {
+enum Part {
+    /// Protocol part.
+    Protocol(String),
     /// Static string.
     Static(String),
     /// A variable that should be looked up.
@@ -34,22 +25,22 @@ pub enum TemplatePart {
     Environ(String),
 }
 
+/// Trait to access variables.
+pub trait Vars {
+    /// Access a variable used for expansion.
+    fn get(&self, k: &str) -> Option<&str>;
+}
+
 impl Template {
     /// Parse a template string, with variables delimited with `{var}`.
     pub fn parse(mut input: &str) -> Result<Template, Error> {
-        let mut base = Base::Root;
+        let mut parts = Vec::new();
 
-        if let Some(index) = input.find(":") {
-            match &input[..index] {
-                "home" => base = Base::Home,
-                "path" => base = Base::Path,
-                base => bail!("unsupported base `{}`", base),
-            }
-
-            input = &input[index + 1..];
+        if let Some(index) = input.find("://") {
+            parts.push(Part::Protocol(input[..index].to_string()));
+            input = &input[index + 3..];
         }
 
-        let mut parts = Vec::new();
         let mut it = input.char_indices();
 
         let mut start = 0;
@@ -58,31 +49,31 @@ impl Template {
             match c {
                 '{' => {
                     if index != start {
-                        parts.push(TemplatePart::Static(input[start..index].to_string()));
+                        parts.push(Part::Static(input[start..index].to_string()));
                     }
 
                     let (end, var) = var(input, &mut it)?;
                     start = end;
-                    parts.push(TemplatePart::Variable(var.to_string()));
+                    parts.push(Part::Variable(var.to_string()));
                 }
                 '$' => {
                     if index != start {
-                        parts.push(TemplatePart::Static(input[start..index].to_string()));
+                        parts.push(Part::Static(input[start..index].to_string()));
                     }
 
                     let (end, e) = environ(input, &mut it)?;
                     start = end;
-                    parts.push(TemplatePart::Environ(e.to_string()));
+                    parts.push(Part::Environ(e.to_string()));
                 }
                 _ => {}
             }
         }
 
         if !input[start..].is_empty() {
-            parts.push(TemplatePart::Static(input[start..].to_string()));
+            parts.push(Part::Static(input[start..].to_string()));
         }
 
-        return Ok(Template { base, parts });
+        return Ok(Template { parts });
 
         fn var<'s>(
             input: &'s str,
@@ -119,12 +110,16 @@ impl Template {
     }
 
     /// Render as a relative path buffer.
-    pub fn render_as_relative_path(
+    pub fn as_relative_path(
         &self,
-        facts: &Facts,
+        vars: impl Vars,
         environment: impl Environment,
     ) -> Result<Option<RelativePathBuf>, Error> {
-        let value = match self.render(facts, environment)? {
+        let protocol = |_: &str| {
+            bail!("Relative paths do not support protocols");
+        };
+
+        let value = match self.render(vars, environment, protocol)? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -133,24 +128,37 @@ impl Template {
     }
 
     /// Render as a path.
-    pub fn render_as_path(
+    pub fn as_path(
         &self,
         root: &Path,
         base_dirs: Option<&BaseDirs>,
-        facts: &Facts,
+        vars: impl Vars,
         environment: impl Environment,
     ) -> Result<Option<PathBuf>, Error> {
-        let value = match self.render(facts, environment)? {
+        let mut base = Some(root);
+
+        let protocol = |proto: &str| {
+            let b = match proto {
+                "home" => base_dirs
+                    .ok_or_else(|| format_err!("Base dirs are required for home directory"))?
+                    .home_dir(),
+                proto => {
+                    bail!("Unsupported protocol `{}`", proto);
+                }
+            };
+
+            base = Some(b);
+            Ok(())
+        };
+
+        let value = match self.render(vars, environment, protocol)? {
             Some(value) => value,
             None => return Ok(None),
         };
 
-        let base = match self.base {
-            Base::Home => base_dirs
-                .ok_or_else(|| format_err!("base dirs are required for home directory"))?
-                .home_dir(),
-            Base::Root => root,
-            Base::Path => {
+        let base = match base {
+            Some(base) => base,
+            None => {
                 let mut buf = PathBuf::new();
                 buf.extend(RelativePath::new(&value).components().map(|c| c.as_str()));
                 return Ok(Some(buf));
@@ -160,21 +168,32 @@ impl Template {
         Ok(Some(RelativePath::new(&value).to_path(base)))
     }
 
-    /// Render the template variable.
-    pub fn render(
+    /// Simplified to render as string.
+    pub fn as_string(
         &self,
-        facts: &Facts,
+        vars: impl Vars,
         environment: impl Environment,
     ) -> Result<Option<String>, Error> {
-        use self::TemplatePart::*;
+        self.render(vars, environment, |_| Ok(()))
+    }
+
+    /// Render the template variable.
+    fn render(
+        &self,
+        vars: impl Vars,
+        environment: impl Environment,
+        mut protocol: impl FnMut(&str) -> Result<(), Error>,
+    ) -> Result<Option<String>, Error> {
+        use self::Part::*;
         use std::fmt::Write;
 
         let mut out = String::new();
 
         for part in &self.parts {
             match *part {
+                Protocol(ref proto) => protocol(proto)?,
                 Static(ref s) => out.write_str(s.as_str())?,
-                Variable(ref var) => match facts.get(var) {
+                Variable(ref var) => match vars.get(var) {
                     Some(value) => out.write_str(value)?,
                     None => return Ok(None),
                 },
@@ -201,18 +220,19 @@ impl<'de> de::Deserialize<'de> for Template {
 
 #[cfg(test)]
 mod tests {
-    use self::TemplatePart::*;
-    use super::{Base, Template, TemplatePart};
+    use self::Part::*;
+    use super::{Part, Template};
     use crate::{environment, facts::Facts};
     use std::collections::HashMap;
 
     #[test]
     fn test_parse_template() {
-        let t = Template::parse("home:root/{foo}/$HOME/bar.yaml").unwrap();
+        let t = Template::parse("home://root/{foo}/$HOME/bar.yaml").unwrap();
 
         assert_eq!(
             t.parts,
             vec![
+                Protocol("home".to_string()),
                 Static("root/".to_string()),
                 Variable("foo".to_string()),
                 Static("/".to_string()),
@@ -221,15 +241,13 @@ mod tests {
             ]
         );
 
-        assert_eq!(t.base, Base::Home);
-
         let facts = Facts::new(vec![("foo".to_string(), "baz".to_string())]);
 
         let mut environment = HashMap::new();
         environment.insert("HOME".to_string(), "home".to_string());
 
         assert_eq!(
-            t.render(&facts, environment::Custom(&environment))
+            t.render(&facts, environment::Custom(&environment), |_| Ok(()))
                 .unwrap()
                 .map(|n| n.to_string()),
             Some("root/baz/home/bar.yaml".to_string())

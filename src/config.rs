@@ -18,12 +18,14 @@ pub struct Config {
         deserialize_with = "human_duration"
     )]
     pub git_refresh: Duration,
+
     /// The interval at which we check for packages.
     #[serde(
         default = "default_package_refresh",
         deserialize_with = "human_duration"
     )]
     pub package_refresh: Duration,
+
     /// The hierarchy at which we load `Data` from.
     pub hierarchy: Vec<Template>,
     /// The systems to apply.
@@ -41,7 +43,7 @@ fn default_package_refresh() -> Duration {
 }
 
 /// Parse a human duration.
-fn human_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+pub fn human_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
 where
     D: Deserializer<'de>,
 {

@@ -7,7 +7,9 @@ use serde_derive::Deserialize;
 /// Builds one unit for every directory and entry that needs to be linked.
 system_struct! {
     LinkDir {
+        #[doc="Where to link files from."]
         pub from: Template,
+        #[doc="Where to link files to."]
         pub to: Option<Template>,
     }
 }
@@ -28,17 +30,14 @@ impl LinkDir {
 
         let mut units = Vec::new();
 
-        let from = match self
-            .from
-            .render_as_path(root, base_dirs, facts, environment)?
-        {
+        let from = match self.from.as_path(root, base_dirs, facts, environment)? {
             Some(from) => from,
             None => return Ok(units),
         };
 
         // resolve destination, if unspecified defaults to relative current directory.
         let to = match self.to.as_ref() {
-            Some(to) => match to.render_as_path(root, base_dirs, facts, environment)? {
+            Some(to) => match to.as_path(root, base_dirs, facts, environment)? {
                 Some(to) => to,
                 None => return Ok(units),
             },
@@ -63,13 +62,10 @@ impl LinkDir {
                 continue;
             }
 
-            let link = match to_path
+            let link = to_path
                 .parent()
                 .and_then(|p| FileUtils::path_relative_from(&from_path, p))
-            {
-                Some(link) => link,
-                None => from_path.to_owned(),
-            };
+                .unwrap_or_else(|| from_path.to_owned());
 
             // Maybe create a symlink!
             units.extend(file_utils.symlink(&to_path, link, to.as_ref())?);

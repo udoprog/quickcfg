@@ -1,6 +1,6 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use crate::{hierarchy::Data, packages, packages::PackageManager, state::State};
+use crate::{git::Git, hierarchy::Data, packages, packages::PackageManager, state::State};
 use failure::{bail, format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
 use std::fmt;
@@ -47,56 +47,55 @@ pub struct UnitInput<'a, 's, 'c: 's> {
     pub state: &'s mut State<'c>,
 }
 
-/// A single unit of work.
-#[derive(Debug)]
-pub enum Unit {
-    System,
-    CopyFile(CopyFile),
-    Symlink(Symlink),
-    CreateDir(CreateDir),
-    InstallPackages(InstallPackages),
-    Download(Download),
-    AddMode(AddMode),
-    RunOnce(RunOnce),
-}
+/// Declare unit enum.
+macro_rules! unit {
+    ($($name:ident,)*) => {
+        /// A single unit of work.
+        #[derive(Debug)]
+        pub enum Unit {
+            System,
+            $($name($name),)*
+        }
 
-impl Unit {
-    pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        use self::Unit::*;
+        impl Unit {
+            pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
+                use self::Unit::*;
 
-        let res = match *self {
-            // do nothing.
-            System => Ok(()),
-            // do something.
-            CopyFile(ref unit) => unit.apply(input),
-            Symlink(ref unit) => unit.apply(input),
-            CreateDir(ref unit) => unit.apply(input),
-            InstallPackages(ref unit) => unit.apply(input),
-            Download(ref unit) => unit.apply(input),
-            AddMode(ref unit) => unit.apply(input),
-            RunOnce(ref unit) => unit.apply(input),
-        };
+                let res = match *self {
+                    // do nothing.
+                    System => Ok(()),
+                    // do something.
+                    $($name(ref unit) => unit.apply(input),)*
+                };
 
-        Ok(res.with_context(|_| format_err!("Failed to run unit: {:?}", self))?)
-    }
-}
+                Ok(res.with_context(|_| format_err!("Failed to run unit: {:?}", self))?)
+            }
+        }
 
-impl fmt::Display for Unit {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        use self::Unit::*;
+        impl fmt::Display for Unit {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                use self::Unit::*;
 
-        match *self {
-            System => write!(fmt, "system unit"),
-            CopyFile(ref unit) => unit.fmt(fmt),
-            Symlink(ref unit) => unit.fmt(fmt),
-            CreateDir(ref unit) => unit.fmt(fmt),
-            InstallPackages(ref unit) => unit.fmt(fmt),
-            Download(ref unit) => unit.fmt(fmt),
-            AddMode(ref unit) => unit.fmt(fmt),
-            RunOnce(ref unit) => unit.fmt(fmt),
+                match *self {
+                    System => write!(fmt, "system unit"),
+                    $($name(ref unit) => unit.fmt(fmt),)*
+                }
+            }
         }
     }
 }
+
+unit![
+    CopyFile,
+    Symlink,
+    CreateDir,
+    InstallPackages,
+    Download,
+    AddMode,
+    RunOnce,
+    GitClone,
+    GitUpdate,
+];
 
 /// A system unit, which is a unit coupled with a set of dependencies.
 #[derive(Debug)]
@@ -441,6 +440,8 @@ pub struct RunOnce {
     pub path: PathBuf,
     /// Run using a shell.
     pub shell: bool,
+    /// Arguments to add when running the command.
+    pub args: Vec<String>,
 }
 
 impl fmt::Display for RunOnce {
@@ -458,6 +459,7 @@ impl RunOnce {
             id,
             path,
             shell: false,
+            args: Vec::new(),
         }
     }
 
@@ -470,6 +472,7 @@ impl RunOnce {
             ref id,
             ref path,
             shell,
+            ref args,
         } = *self;
 
         log::info!("Running {}", path.display());
@@ -481,6 +484,10 @@ impl RunOnce {
         } else {
             Command::new(&path)
         };
+
+        for arg in args {
+            cmd.arg(arg);
+        }
 
         let status = cmd
             .status()
@@ -502,5 +509,100 @@ impl RunOnce {
 impl From<RunOnce> for Unit {
     fn from(value: RunOnce) -> Unit {
         Unit::RunOnce(value)
+    }
+}
+
+/// Run the given executable once.
+#[derive(Debug)]
+pub struct GitClone {
+    /// The ID of the thing being cloned.
+    pub id: String,
+    /// Git repository.
+    pub git: Git,
+    /// Remote to clone.
+    pub remote: String,
+}
+
+impl fmt::Display for GitClone {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "git clone `{}` to `{}`",
+            self.remote,
+            self.git.path.display()
+        )
+    }
+}
+
+impl GitClone {
+    /// Apply the unit.
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
+        let UnitInput { state, .. } = input;
+
+        let GitClone {
+            ref git,
+            ref remote,
+            ref id,
+        } = *self;
+
+        log::info!("Cloning `{}` into `{}`", remote, git.path.display());
+        git.clone(remote)?;
+        state.touch(&id);
+        Ok(())
+    }
+}
+
+impl From<GitClone> for Unit {
+    fn from(value: GitClone) -> Unit {
+        Unit::GitClone(value)
+    }
+}
+
+/// Run the given executable once.
+#[derive(Debug)]
+pub struct GitUpdate {
+    /// The ID of the thing being cloned.
+    pub id: String,
+    /// Git repository.
+    pub git: Git,
+    /// If the update should be forced.
+    pub force: bool,
+}
+
+impl fmt::Display for GitUpdate {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "git update: {}", self.git.path.display())
+    }
+}
+
+impl GitUpdate {
+    /// Apply the unit.
+    fn apply(&self, input: UnitInput) -> Result<(), Error> {
+        let UnitInput { state, .. } = input;
+
+        let GitUpdate {
+            ref git,
+            force,
+            ref id,
+        } = *self;
+
+        if git.needs_update()? {
+            if force {
+                log::info!("Force updating `{}`", git.path.display());
+                git.force_update()?;
+            } else {
+                log::info!("Updating `{}`", git.path.display());
+                git.update()?;
+            }
+        }
+
+        state.touch(&id);
+        Ok(())
+    }
+}
+
+impl From<GitUpdate> for Unit {
+    fn from(value: GitUpdate) -> Unit {
+        Unit::GitUpdate(value)
     }
 }

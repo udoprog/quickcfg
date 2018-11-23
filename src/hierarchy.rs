@@ -126,7 +126,7 @@ pub fn load<'a>(
     let mut stages = Vec::new();
 
     for h in it {
-        let path = match h.render_as_relative_path(facts, environment)? {
+        let path = match h.as_relative_path(facts, environment)? {
             None => continue,
             Some(path) => path,
         };
