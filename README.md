@@ -98,7 +98,7 @@ Copies a directory recursively.
 ```yaml
 type: copy-dir
 from: ./some/dir
-to: home:some/dir
+to: home://some/dir
 templates: false
 ```
 
@@ -113,7 +113,7 @@ type: link-dir
 # Directory to link from.
 from: ./some/dir
 # Directory to link towards.
-to: home:some/dir
+to: home://some/dir
 ```
 
 Will create the corresponding directory structure, but all files will be symbolic links.
@@ -189,7 +189,7 @@ Creates a symlink.
 
 ```yaml
 type: link
-path: home:.vimrc
+path: home://.vimrc
 link: .vim/vimrc
 ```
 
