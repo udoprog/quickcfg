@@ -96,6 +96,7 @@ top of the template.
 Copies a directory recursively.
 
 ```yaml
+type: copy-dir
 from: ./some/dir
 to: home:some/dir
 templates: false
@@ -108,11 +109,24 @@ Will copy a directory recursively.
 Links a directory recursively.
 
 ```yaml
+type: link-dir
+# Directory to link from.
 from: ./some/dir
+# Directory to link towards.
 to: home:some/dir
 ```
 
 Will create the corresponding directory structure, but all files will be symbolic links.
+
+#### `git-sync`
+
+System that syncs a single git repository to some path.
+
+```yaml
+type: git-sync
+path: home://.oh-my-zsh
+remote: https://github.com/robbyrussell/oh-my-zsh.git 
+```
 
 #### `install-packages`
 
@@ -169,7 +183,7 @@ The `id` is to uniquely identify that this system has only been run once.
 
 Creates a symlink.
 
-```
+```yaml
 type: link
 path: home:.vimrc
 link: .vim/vimrc
