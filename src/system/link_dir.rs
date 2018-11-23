@@ -1,22 +1,18 @@
 use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileUtils,
 };
-use failure::{bail, Error};
+use failure::Error;
 use serde_derive::Deserialize;
-use std::fs;
 
-/// Builds one unit for every directory and file that needs to be copied.
+/// Builds one unit for every directory and entry that needs to be linked.
 system_struct! {
-    CopyDir {
+    LinkDir {
         pub from: Template,
         pub to: Option<Template>,
-        #[serde(default)]
-        pub templates: bool,
     }
 }
 
-impl CopyDir {
-    /// Copy one directory to another.
+impl LinkDir {
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
         E: Copy + e::Environment,
@@ -59,12 +55,6 @@ impl CopyDir {
 
             let source_type = from.file_type();
 
-            if source_type.is_symlink() {
-                let link = fs::read_link(from_path)?;
-                units.extend(file_utils.symlink(&to_path, link, to.as_ref())?);
-                continue;
-            }
-
             if source_type.is_dir() {
                 if FileUtils::should_create_dir(&to_path, to.as_ref())? {
                     units.extend(file_utils.create_dir_all(&to_path)?);
@@ -73,19 +63,16 @@ impl CopyDir {
                 continue;
             }
 
-            if source_type.is_file() {
-                if FileUtils::should_copy_file(&from, &to_path, to.as_ref())? {
-                    units.push(file_utils.copy_file(&from_path, &to_path, self.templates)?);
-                }
+            let link = match to_path
+                .parent()
+                .and_then(|p| FileUtils::path_relative_from(&from_path, p))
+            {
+                Some(link) => link,
+                None => from_path.to_owned(),
+            };
 
-                continue;
-            }
-
-            bail!(
-                "Cannot handle file with metadata `{:?}`: {}",
-                from,
-                from_path.display()
-            );
+            // Maybe create a symlink!
+            units.extend(file_utils.symlink(&to_path, link, to.as_ref())?);
         }
 
         return Ok(units);

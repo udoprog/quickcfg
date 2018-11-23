@@ -19,17 +19,21 @@ mod copy_dir;
 mod download_and_run;
 mod install_packages;
 mod link;
+mod link_dir;
 
 use self::copy_dir::CopyDir;
 use self::download_and_run::DownloadAndRun;
 use self::install_packages::InstallPackages;
 use self::link::Link;
+use self::link_dir::LinkDir;
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum System {
     #[serde(rename = "copy-dir")]
     CopyDir(CopyDir),
+    #[serde(rename = "link-dir")]
+    LinkDir(LinkDir),
     #[serde(rename = "install-packages")]
     InstallPackages(InstallPackages),
     #[serde(rename = "download-and-run")]
@@ -39,7 +43,7 @@ pub enum System {
 }
 
 impl System {
-    system_functions![CopyDir, InstallPackages, DownloadAndRun, Link,];
+    system_functions![CopyDir, LinkDir, InstallPackages, DownloadAndRun, Link,];
 }
 
 /// All inputs for a system.

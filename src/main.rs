@@ -104,7 +104,7 @@ fn try_apply_config<'c>(
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
-    let file_utils = FileUtils::new(state_dir, &allocator);
+    let file_utils = FileUtils::new(opts, state_dir, &allocator);
 
     // apply systems in parallel.
     let results = config

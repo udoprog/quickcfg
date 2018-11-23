@@ -1,7 +1,10 @@
 //! Thread-safe utilities for creating files and directories.
 //! use std::collections::HashMap;
 //!
-use crate::unit::{CopyFile, CreateDir, Symlink, SystemUnit, UnitAllocator, UnitId};
+use crate::{
+    opts::Opts,
+    unit::{CopyFile, CreateDir, Symlink, SystemUnit, UnitAllocator, UnitId},
+};
 use failure::{bail, format_err, Error};
 use fxhash::FxHashMap;
 use std::fs;
@@ -16,15 +19,17 @@ struct FileUtilsInner {
 
 /// Utilities to build units for creating directories.
 pub struct FileUtils<'a> {
-    allocator: &'a UnitAllocator,
+    opts: &'a Opts,
     state_dir: PathBuf,
+    allocator: &'a UnitAllocator,
     inner: RwLock<FileUtilsInner>,
 }
 
 impl<'a> FileUtils<'a> {
     /// Create new, thread-safe file utilities.
-    pub fn new(state_dir: &Path, allocator: &'a UnitAllocator) -> FileUtils<'a> {
+    pub fn new(opts: &'a Opts, state_dir: &Path, allocator: &'a UnitAllocator) -> FileUtils<'a> {
         FileUtils {
+            opts,
             allocator,
             state_dir: state_dir.to_owned(),
             inner: RwLock::new(FileUtilsInner {
@@ -34,17 +39,51 @@ impl<'a> FileUtils<'a> {
         }
     }
 
-    /// Set up the unit to copy a file.
-    pub fn symlink(&self, path: &Path, link: PathBuf) -> Result<SystemUnit, Error> {
+    /// Try to create a symlink.
+    pub fn symlink(
+        &self,
+        path: &Path,
+        link: PathBuf,
+        meta: Option<&fs::Metadata>,
+    ) -> Result<Option<SystemUnit>, Error> {
+        let remove = match meta {
+            Some(meta) => {
+                let ty = meta.file_type();
+
+                if !ty.is_symlink() {
+                    bail!("File exists but is not a symlink: {}", path.display());
+                }
+
+                let actual_link = fs::read_link(path)?;
+
+                if actual_link == link {
+                    return Ok(None);
+                }
+
+                if !self.opts.force {
+                    bail!(
+                        "Symlink exists `{}`, but contains the wrong link `{}`, expected: {} (use `--force` to override)",
+                        path.display(),
+                        actual_link.display(),
+                        link.display(),
+                    );
+                }
+
+                true
+            }
+            None => false,
+        };
+
+        let mut unit = self.allocator.unit(Symlink {
+            remove,
+            path: path.to_owned(),
+            link,
+        });
+
         let mut inner = self
             .inner
             .write()
             .map_err(|_| format_err!("lock poisoned"))?;
-
-        let mut unit = self.allocator.unit(Symlink {
-            path: path.to_owned(),
-            link,
-        });
 
         if let Some(parent) = path.parent() {
             unit.dependencies
@@ -55,7 +94,7 @@ impl<'a> FileUtils<'a> {
             bail!("Multiple systems try to modify file: {}", path.display());
         }
 
-        Ok(unit)
+        Ok(Some(unit))
     }
 
     /// Set up the unit to copy a file.
@@ -167,12 +206,8 @@ impl<'a> FileUtils<'a> {
         }
     }
 
-    /// Test if we should create the specified symlink.
-    pub fn should_create_symlink(
-        path: &Path,
-        link: &Path,
-        meta: Option<&fs::Metadata>,
-    ) -> Result<bool, Error> {
+    /// Test if we should create the destination directory.
+    pub fn should_create_dir(path: &Path, meta: Option<&fs::Metadata>) -> Result<bool, Error> {
         let meta = match meta {
             Some(meta) => meta,
             None => return Ok(true),
@@ -180,21 +215,94 @@ impl<'a> FileUtils<'a> {
 
         let ty = meta.file_type();
 
-        if !ty.is_symlink() {
-            bail!("File exists but is not a symlink: {}", path.display());
-        }
-
-        let actual_link = fs::read_link(path)?;
-
-        if actual_link != link {
-            bail!(
-                "Symlink exists `{}`, but contains the wrong link `{}`, expected: {}",
-                path.display(),
-                actual_link.display(),
-                link.display(),
-            );
+        if !ty.is_dir() {
+            bail!("Exists but is not a dir: {}", path.display());
         }
 
         Ok(false)
+    }
+
+    /// Test if we should copy the file.
+    ///
+    /// This is true if:
+    ///
+    /// * The destination file does not exist.
+    /// * The destination file has a modified timestamp less than the source file.
+    pub fn should_copy_file(
+        from: &fs::Metadata,
+        to_path: &Path,
+        to: Option<&fs::Metadata>,
+    ) -> Result<bool, Error> {
+        let to = match to {
+            Some(to) => to,
+            None => return Ok(true),
+        };
+
+        if !to.is_file() {
+            bail!("Exists but is not a file: {}", to_path.display());
+        }
+
+        Ok(from.modified()? > to.modified()?)
+    }
+
+    /// Construct a relative path from a provided base directory path to the provided path
+    ///
+    /// ```rust
+    /// use quickcfg::FileUtils;
+    /// use std::path::PathBuf;
+    ///
+    /// let baz: PathBuf = "/foo/bar/baz".into();
+    /// let bar: PathBuf = "/foo/bar".into();
+    /// let quux: PathBuf = "/foo/bar/quux".into();
+    /// assert_eq!(FileUtils::path_relative_from(&bar, &baz), Some("../".into()));
+    /// assert_eq!(FileUtils::path_relative_from(&baz, &bar), Some("baz".into()));
+    /// assert_eq!(FileUtils::path_relative_from(&quux, &baz), Some("../quux".into()));
+    /// assert_eq!(FileUtils::path_relative_from(&baz, &quux), Some("../baz".into()));
+    /// assert_eq!(FileUtils::path_relative_from(&bar, &quux), Some("../".into()));
+    ///
+    /// ```
+    pub fn path_relative_from(path: &Path, base: &Path) -> Option<PathBuf> {
+        // Adapted from:
+        // https://github.com/Manishearth/pathdiff/blob/f64de9f529424c43fe07cd5f16f4160c6fdab224/src/lib.rs
+        use std::path::Component;
+
+        if path.is_absolute() != base.is_absolute() {
+            if path.is_absolute() {
+                return Some(PathBuf::from(path));
+            } else {
+                return None;
+            }
+        }
+
+        let mut ita = path.components();
+        let mut itb = base.components();
+
+        let mut comps: Vec<Component> = vec![];
+
+        loop {
+            match (ita.next(), itb.next()) {
+                (None, None) => break,
+                (Some(a), None) => {
+                    comps.push(a);
+                    comps.extend(ita.by_ref());
+                    break;
+                }
+                (None, _) => comps.push(Component::ParentDir),
+                (Some(a), Some(b)) if comps.is_empty() && a == b => (),
+                (Some(a), Some(b)) if b == Component::CurDir => comps.push(a),
+                (Some(_), Some(b)) if b == Component::ParentDir => return None,
+                (Some(a), Some(_)) => {
+                    comps.push(Component::ParentDir);
+                    for _ in itb {
+                        comps.push(Component::ParentDir);
+                    }
+                    comps.push(a);
+                    comps.extend(ita.by_ref());
+                    break;
+                }
+            }
+        }
+
+        Some(comps.iter().map(|c| c.as_os_str()).collect())
     }
 }

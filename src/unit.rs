@@ -268,7 +268,11 @@ impl From<CopyFile> for Unit {
 /// The configuration for a unit to create a symlink.
 #[derive(Debug)]
 pub struct Symlink {
+    /// `true` if the destination file needs to be removed.
+    pub remove: bool,
+    /// destination file to create.
     pub path: PathBuf,
+    /// link to set up.
     pub link: PathBuf,
 }
 
@@ -276,7 +280,7 @@ impl fmt::Display for Symlink {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmt,
-            "link file {} -> {}",
+            "link file {} to {}",
             self.path.display(),
             self.link.display()
         )
@@ -285,11 +289,22 @@ impl fmt::Display for Symlink {
 
 impl Symlink {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        use std::fs;
         use std::os::unix::fs::symlink;
 
-        let Symlink { ref path, ref link } = *self;
+        let Symlink {
+            remove,
+            ref path,
+            ref link,
+        } = *self;
 
-        log::info!("linking {} -> {}", path.display(), link.display());
+        if remove {
+            log::info!("re-linking {} to {}", path.display(), link.display());
+            fs::remove_file(&path)?;
+        } else {
+            log::info!("linking {} to {}", path.display(), link.display());
+        }
+
         symlink(link, path)?;
         Ok(())
     }

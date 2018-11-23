@@ -47,10 +47,20 @@ impl Link {
 
         let m = FileUtils::try_open_meta(&path)?;
 
-        if FileUtils::should_create_symlink(&path, &link, m.as_ref())? {
-            units.push(file_utils.symlink(&path, link)?);
-        }
+        // try to relativize link.
+        let link = if link.is_absolute() {
+            match path
+                .parent()
+                .and_then(|p| FileUtils::path_relative_from(&link, p))
+            {
+                Some(link) => link,
+                None => link,
+            }
+        } else {
+            link
+        };
 
+        units.extend(file_utils.symlink(&path, link, m.as_ref())?);
         Ok(units)
     }
 }

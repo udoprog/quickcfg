@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Base {
     /// Path is interpreted as a verbatim path.
-    None,
+    Path,
     /// The configuration root.
     Root,
     /// The current users home directory.
@@ -37,12 +37,12 @@ pub enum TemplatePart {
 impl Template {
     /// Parse a template string, with variables delimited with `{var}`.
     pub fn parse(mut input: &str) -> Result<Template, Error> {
-        let mut base = Base::None;
+        let mut base = Base::Root;
 
         if let Some(index) = input.find(":") {
             match &input[..index] {
                 "home" => base = Base::Home,
-                "root" => base = Base::Root,
+                "path" => base = Base::Path,
                 base => bail!("unsupported base `{}`", base),
             }
 
@@ -150,7 +150,7 @@ impl Template {
                 .ok_or_else(|| format_err!("base dirs are required for home directory"))?
                 .home_dir(),
             Base::Root => root,
-            Base::None => {
+            Base::Path => {
                 let mut buf = PathBuf::new();
                 buf.extend(RelativePath::new(&value).components().map(|c| c.as_str()));
                 return Ok(Some(buf));

@@ -39,7 +39,7 @@ hierarchy:
 systems:
   # System to copy an entire directory to another.
   - type: copy-dir
-    from: root:./home
+    from: home
     to: home:.
     templates: true
   # System to ensure that a set of packages are installed.
@@ -56,6 +56,9 @@ systems:
   - type: link
     path: home:.vimrc
     link: .vim/vimrc
+  - type: link-dir
+    from: bin
+    to: home:usr/bin
 ```
 
 ## Systems
@@ -65,12 +68,23 @@ systems:
 Copies a directory recursively.
 
 ```yaml
-from: root:./some/dir
+from: ./some/dir
 to: home:some/dir
 templates: false
 ```
 
 Will copy a directory recursively.
+
+#### `link-dir`
+
+Links a directory recursively.
+
+```yaml
+from: ./some/dir
+to: home:some/dir
+```
+
+Will create the corresponding directory structure, but all files will be symbolic links.
 
 #### `install-packages`
 
