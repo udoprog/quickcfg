@@ -14,6 +14,8 @@ I've tried my best to make all operations non-destructive, but beware of bugs!
 
 [dotfiles]: https://github.com/udoprog/dotfiles
 
+![Example](gfx/example1.gif)
+
 ## Features
 
 **Zero dependencies**, All you need is the `quickcfg` binary and your configuration repo.
