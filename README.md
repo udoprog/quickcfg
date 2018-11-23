@@ -124,8 +124,12 @@ System that syncs a single git repository to some path.
 
 ```yaml
 type: git-sync
+# Where to clone.
 path: home://.oh-my-zsh
+# Remote to clone.
 remote: https://github.com/robbyrussell/oh-my-zsh.git 
+# Refresh once per day.
+refresh: 1d
 ```
 
 #### `install-packages`
