@@ -86,11 +86,11 @@ impl GitSync {
                 remote: self.remote.to_string(),
             });
 
-            git_clone.thread_local = true;
-
             git_clone
                 .dependencies
                 .extend(create_dirs.iter().map(|u| u.id));
+
+            file_utils.insert_directory(&path, &git_clone)?;
 
             units.extend(create_dirs);
             units.push(git_clone);

@@ -39,6 +39,37 @@ impl<'a> FileUtils<'a> {
         }
     }
 
+    /// Indicate that a file is being modified by a unit.
+    pub fn insert_file(&self, path: &Path, unit: &SystemUnit) -> Result<(), Error> {
+        let mut inner = self
+            .inner
+            .write()
+            .map_err(|_| format_err!("lock poisoned"))?;
+
+        if let Some(_) = inner.files.insert(path.to_owned(), unit.id) {
+            bail!("Multiple systems try to modify file: {}", path.display());
+        }
+
+        Ok(())
+    }
+
+    /// Indicate that a directory is being modified by a unit.
+    pub fn insert_directory(&self, path: &Path, unit: &SystemUnit) -> Result<(), Error> {
+        let mut inner = self
+            .inner
+            .write()
+            .map_err(|_| format_err!("lock poisoned"))?;
+
+        if let Some(_) = inner.directories.insert(path.to_owned(), unit.id) {
+            bail!(
+                "Multiple systems try to modify directory: {}",
+                path.display()
+            );
+        }
+
+        Ok(())
+    }
+
     /// Try to create a symlink.
     pub fn symlink(
         &self,
@@ -91,7 +122,7 @@ impl<'a> FileUtils<'a> {
         }
 
         if let Some(_) = inner.files.insert(path.to_owned(), unit.id) {
-            bail!("Multiple systems try to modify file: {}", path.display());
+            bail!("Multiple systems trying to modify file: {}", path.display());
         }
 
         Ok(Some(unit))
