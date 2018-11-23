@@ -1,11 +1,11 @@
 //! Helper to run external commands.
 
-use failure::{Fail, Error, bail};
-use std::ffi::{OsString, OsStr};
-use std::io;
+use failure::{bail, Error, Fail};
+use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::process;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::process;
 
 /// The decoded output after running a command.
 pub struct Output {
@@ -93,7 +93,8 @@ impl Command {
     where
         S: AsRef<OsStr>,
     {
-        let lines = self.run_stdout(args)?
+        let lines = self
+            .run_stdout(args)?
             .split("\n")
             .map(|s| s.to_string())
             .collect();
@@ -152,10 +153,7 @@ impl Command {
     }
 
     /// Run the given command, return a string of all output.
-    pub fn run<S>(
-        &self,
-        args: impl IntoIterator<Item = S>,
-    ) -> Result<Output, io::Error>
+    pub fn run<S>(&self, args: impl IntoIterator<Item = S>) -> Result<Output, io::Error>
     where
         S: AsRef<OsStr>,
     {

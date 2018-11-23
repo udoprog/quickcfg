@@ -35,30 +35,13 @@ impl<'a> FileUtils<'a> {
 
     /// Access or allocate a file dependency of the given path.
     pub fn file_dependency(&self, path: &Path) -> Result<Dependency, Error> {
-        let mut files = self
-            .files
-            .write()
-            .map_err(|_| format_err!("lock poisoned"))?;
-
-        let id = *files
-            .entry(path.to_owned())
-            .or_insert_with(|| self.allocator.allocate());
-
-        Ok(Dependency::File(id))
+        self.get_or_insert(&self.files, path).map(Dependency::File)
     }
 
     /// Access or allocate a directory dependency of the given path.
     pub fn dir_dependency(&self, path: &Path) -> Result<Dependency, Error> {
-        let mut directories = self
-            .directories
-            .write()
-            .map_err(|_| format_err!("lock poisoned"))?;
-
-        let id = *directories
-            .entry(path.to_owned())
-            .or_insert_with(|| self.allocator.allocate());
-
-        Ok(Dependency::Dir(id))
+        self.get_or_insert(&self.directories, path)
+            .map(Dependency::Dir)
     }
 
     /// Try to create a symlink.
@@ -313,5 +296,30 @@ impl<'a> FileUtils<'a> {
         }
 
         Some(comps.iter().map(|c| c.as_os_str()).collect())
+    }
+
+    #[inline]
+    fn get_or_insert<K: ?Sized>(
+        &self,
+        map: &RwLock<FxHashMap<K::Owned, UnitId>>,
+        k: &K,
+    ) -> Result<UnitId, Error>
+    where
+        K: std::hash::Hash + Eq + ToOwned,
+        K::Owned: std::hash::Hash + Eq,
+    {
+        {
+            let m = map.read().map_err(|_| format_err!("lock poisoned"))?;
+
+            if let Some(id) = m.get(k).cloned() {
+                return Ok(id);
+            }
+        }
+
+        let mut m = map.write().map_err(|_| format_err!("lock poisoned"))?;
+
+        let id = self.allocator.allocate();
+        m.insert(k.to_owned(), id);
+        Ok(id)
     }
 }

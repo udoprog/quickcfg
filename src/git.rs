@@ -1,9 +1,9 @@
 //! Git abstraction.
 
 use crate::command;
-use std::path::{Path, PathBuf};
-use std::io;
 use failure::Error;
+use std::io;
+use std::path::{Path, PathBuf};
 
 /// Helper to interact with a git repository.
 #[derive(Debug)]
@@ -28,7 +28,7 @@ impl Git {
             Err(e) => match e.kind() {
                 io::ErrorKind::NotFound => Ok(false),
                 _ => return Err(e.into()),
-            }
+            },
         }
     }
 
