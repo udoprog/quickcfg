@@ -6,16 +6,25 @@ use serde_yaml::{Mapping, Value};
 use std::env;
 use std::fs::File;
 use std::path::Path;
+use std::time::SystemTime;
 
 const HEADER: &'static str = "quickcfg:";
 
 /// Wrapper for hierarchy data.
-pub struct Data(Vec<Mapping>);
+pub struct Data {
+    /// The last modification timestamp for a file in the hierarchy.
+    pub last_modified: Option<SystemTime>,
+    /// The hierarchy with data.
+    hierarchy: Vec<Mapping>,
+}
 
 impl Data {
     /// Construct a new set of hierarchical data.
-    pub fn new(data: impl IntoIterator<Item = Mapping>) -> Self {
-        Data(data.into_iter().collect())
+    pub fn new(last_modified: Option<SystemTime>, data: impl IntoIterator<Item = Mapping>) -> Self {
+        Data {
+            last_modified,
+            hierarchy: data.into_iter().collect(),
+        }
     }
 
     /// Load the given key.
@@ -25,7 +34,7 @@ impl Data {
     {
         let key = serde_yaml::Value::String(key.to_string());
 
-        for m in &self.0 {
+        for m in &self.hierarchy {
             if let Some(value) = m.get(&key) {
                 return Ok(Some(T::deserialize(value.clone())?));
             }
@@ -51,7 +60,7 @@ impl Data {
 
         let mut out = Vec::new();
 
-        for m in &self.0 {
+        for m in &self.hierarchy {
             if let Some(value) = m.get(&key) {
                 out.extend(<Vec<T> as Deserialize>::deserialize(value.clone())?);
             }
@@ -124,6 +133,7 @@ pub fn load<'a>(
     environment: impl Copy + e::Environment,
 ) -> Result<Data, Error> {
     let mut stages = Vec::new();
+    let mut last_modified = None;
 
     for h in it {
         let path = match h.as_relative_path(facts, environment)? {
@@ -133,13 +143,20 @@ pub fn load<'a>(
 
         let path = path.to_path(root);
 
+        let modified = path.metadata()?.modified()?;
+
+        last_modified = Some(match last_modified {
+            Some(previous) if previous > modified => previous,
+            _ => modified,
+        });
+
         let map = load_mapping(&path)
             .map_err(|e| format_err!("failed to load: {}: {}", path.display(), e))?;
 
         stages.push(map);
     }
 
-    return Ok(Data(stages));
+    return Ok(Data::new(last_modified, stages));
 
     /// Extend the existing mapping from the given hierarchy.
     fn load_mapping(path: &Path) -> Result<serde_yaml::Mapping, Error> {
@@ -174,7 +191,7 @@ mod tests {
         layer2.insert("bar".into(), "bar value".into());
         layer2.insert("seq".into(), vec![Value::from("item2")].into());
 
-        let data = Data::new(vec![layer1, layer2]);
+        let data = Data::new(None, vec![layer1, layer2]);
 
         assert_eq!(
             data.load::<String>("foo").expect("layer1 key as string"),

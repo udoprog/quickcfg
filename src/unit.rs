@@ -1,12 +1,15 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
-use crate::{git::Git, hierarchy::Data, packages, packages::PackageManager, state::State};
+use crate::{
+    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State, FileUtils,
+};
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dependency {
@@ -55,8 +58,13 @@ pub struct UnitInput<'a, 's, 'c: 's> {
     pub packages: &'a packages::Provider,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
-    /// Unit-local state.
+    /// Read-only state.
+    /// If none, the read state is the mutated state.
+    pub read_state: &'s State<'c>,
+    /// Unit-local state that can be mutated.
     pub state: &'s mut State<'c>,
+    /// Current timestamp.
+    pub now: &'a SystemTime,
 }
 
 /// Declare unit enum.
@@ -180,7 +188,7 @@ impl From<CreateDir> for Unit {
 }
 
 /// The configuration for a unit to copy a single file.
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct CopyFile {
     pub from: PathBuf,
     pub to: PathBuf,
@@ -200,9 +208,20 @@ impl fmt::Display for CopyFile {
 }
 
 impl CopyFile {
+    /// Construct the ID for this unit.
+    fn id(&self) -> String {
+        use std::hash::{Hash, Hasher};
+
+        let mut state = fxhash::FxHasher64::default();
+        self.hash(&mut state);
+
+        format!("copy-file/{:x}", state.finish())
+    }
+
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
+        use handlebars::{Context, Handlebars, Output, RenderContext, Renderable, Template};
         use std::fs::{self, File};
-        use std::io::{self, Write};
+        use std::io::{self, Cursor, Write};
 
         let CopyFile {
             ref from,
@@ -210,64 +229,73 @@ impl CopyFile {
             templates,
         } = *self;
 
-        let UnitInput { data, .. } = input;
+        let UnitInput {
+            data,
+            read_state,
+            state,
+            now,
+            ..
+        } = input;
 
-        if templates {
-            log::info!("{} -> {} (template)", from.display(), to.display());
-            let out = render(&from, data).with_context(|_| RenderError(from.to_owned()))?;
-            File::create(&to)?.write_all(out.as_bytes())?;
-        } else {
+        // just copy file if not a template.
+        if !templates {
             log::info!("{} -> {}", from.display(), to.display());
             io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
+            return Ok(());
         }
 
+        let content = fs::read_to_string(&from)
+            .map_err(|e| format_err!("failed to read path: {}: {}", from.display(), e))?;
+
+        let data = data.load_from_spec(&content).map_err(|e| {
+            format_err!(
+                "failed to load hierarchy for path: {}: {}",
+                from.display(),
+                e
+            )
+        })?;
+
+        let id = self.id();
+        let hash = (&data, &content);
+
+        if read_state.is_hash_fresh(&id, &hash)? {
+            // Nothing about the template would change, only update the modified time of the file.
+            log::info!("touching {}", to.display());
+            return FileUtils::update_timestamps(now, &to);
+        }
+
+        let reg = Handlebars::new();
+
+        let mut out = Vec::<u8>::new();
+
+        let mut tpl = Template::compile2(&content, true)?;
+        tpl.name = Some(from.display().to_string());
+
+        tpl.render(
+            &reg,
+            &Context::wraps(&data)?,
+            &mut RenderContext::new(None),
+            &mut WriteOutput::new(Cursor::new(&mut out)),
+        )?;
+
+        log::info!("{} -> {} (template)", from.display(), to.display());
+        File::create(&to)?.write_all(&out)?;
+        state.touch_hash(&id, &hash)?;
         return Ok(());
 
-        fn render(from: &Path, data: &Data) -> Result<String, Error> {
-            use handlebars::{Context, Handlebars, Output, RenderContext, Renderable, Template};
-            use std::io::{self, Cursor, Write};
+        pub struct WriteOutput<W: Write> {
+            write: W,
+        }
 
-            let content = fs::read_to_string(&from)
-                .map_err(|e| format_err!("failed to read path: {}: {}", from.display(), e))?;
-
-            let data = data.load_from_spec(&content).map_err(|e| {
-                format_err!(
-                    "failed to load hierarchy for path: {}: {}",
-                    from.display(),
-                    e
-                )
-            })?;
-
-            let reg = Handlebars::new();
-
-            let mut out = Vec::<u8>::new();
-
-            let mut tpl = Template::compile2(&content, true)?;
-            tpl.name = Some(from.display().to_string());
-
-            tpl.render(
-                &reg,
-                &Context::wraps(&data)?,
-                &mut RenderContext::new(None),
-                &mut WriteOutput::new(Cursor::new(&mut out)),
-            )?;
-
-            return Ok(String::from_utf8(out)?);
-
-            pub struct WriteOutput<W: Write> {
-                write: W,
+        impl<W: Write> Output for WriteOutput<W> {
+            fn write(&mut self, seg: &str) -> Result<(), io::Error> {
+                self.write.write_all(seg.as_bytes())
             }
+        }
 
-            impl<W: Write> Output for WriteOutput<W> {
-                fn write(&mut self, seg: &str) -> Result<(), io::Error> {
-                    self.write.write_all(seg.as_bytes())
-                }
-            }
-
-            impl<W: Write> WriteOutput<W> {
-                pub fn new(write: W) -> WriteOutput<W> {
-                    WriteOutput { write }
-                }
+        impl<W: Write> WriteOutput<W> {
+            pub fn new(write: W) -> WriteOutput<W> {
+                WriteOutput { write }
             }
         }
     }

@@ -119,7 +119,7 @@ fn try_apply_config<'c>(
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
-    let file_utils = FileUtils::new(opts, state_dir, &allocator);
+    let file_utils = FileUtils::new(opts, state_dir, &allocator, &data);
 
     // apply systems in parallel.
     let results = config
@@ -212,13 +212,18 @@ fn try_apply_config<'c>(
 
         if stage.thread_local {
             for unit in stage.units {
+                let mut s = State::new(&config, now);
+
                 match unit.apply(UnitInput {
                     data: &data,
                     packages: &packages,
-                    state: &mut state,
+                    read_state: &state,
+                    state: &mut s,
+                    now,
                 }) {
                     Ok(()) => {
                         scheduler.mark(unit);
+                        state.extend(s);
                     }
                     Err(e) => {
                         errors.push((unit, e));
@@ -238,7 +243,9 @@ fn try_apply_config<'c>(
                 let res = unit.apply(UnitInput {
                     data: &data,
                     packages: &packages,
+                    read_state: &state,
                     state: &mut s,
+                    now,
                 });
 
                 match res {
