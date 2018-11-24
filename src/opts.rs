@@ -5,11 +5,13 @@ use failure::Error;
 use std::env;
 use std::path::PathBuf;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn app() -> App<'static, 'static> {
-    App::new("My Super Program")
-        .version("1.0")
-        .author("Kevin K. <kbknapp@gmail.com>")
-        .about("Does awesome things")
+    App::new("quickcfg")
+        .version(VERSION)
+        .author("John-John Tedro <udoprog@tedro.se>")
+        .about("Configure your system, quickly!")
         .arg(
             Arg::with_name("root")
                 .long("root")
