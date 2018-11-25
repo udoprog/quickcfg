@@ -1,7 +1,6 @@
 //! Utilities to process a set of units into a set of inter-dependent stages.
 
 use crate::unit::{Dependency, SystemUnit};
-use failure::Error;
 use std::collections::HashSet;
 
 /// Discrete stage to run.
@@ -31,7 +30,7 @@ impl Scheduler {
     }
 
     /// Plans and returns the next stage to run.
-    pub fn stage(&mut self) -> Result<Option<Stage>, Error> {
+    pub fn stage(&mut self) -> Option<Stage> {
         let Scheduler {
             ref mut units,
             ref provided,
@@ -40,26 +39,6 @@ impl Scheduler {
         } = *self;
 
         loop {
-            if !stage.is_empty() {
-                return Ok(Some(Stage {
-                    thread_local: false,
-                    units: stage.drain(..).collect(),
-                }));
-            }
-
-            if !thread_locals.is_empty() {
-                let units = thread_locals.drain(..).collect();
-
-                return Ok(Some(Stage {
-                    thread_local: true,
-                    units,
-                }));
-            }
-
-            if units.is_empty() {
-                return Ok(None);
-            }
-
             // Units that roll over into the next scheduling phase.
             let mut next = Vec::new();
 
@@ -78,8 +57,24 @@ impl Scheduler {
 
             units.extend(next);
 
+            if !stage.is_empty() {
+                return Some(Stage {
+                    thread_local: false,
+                    units: stage.drain(..).collect(),
+                });
+            }
+
+            if !thread_locals.is_empty() {
+                let units = thread_locals.drain(..).collect();
+
+                return Some(Stage {
+                    thread_local: true,
+                    units,
+                });
+            }
+
             if thread_locals.is_empty() && stage.is_empty() {
-                return Ok(None);
+                return None;
             }
         }
     }

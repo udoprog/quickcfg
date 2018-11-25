@@ -98,6 +98,11 @@ fn try_apply_config<'c>(
     mut state: State<'c>,
 ) -> Result<State<'c>, Error> {
     use rayon::prelude::*;
+    use std::sync::mpsc::channel;
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .build()
+        .with_context(|_| format_err!("Failed to construct thread pool"))?;
 
     if !try_update_config(opts, config, now, root, &mut state)? {
         // if we only want to run on updates, exit now.
@@ -121,12 +126,19 @@ fn try_apply_config<'c>(
     let base_dirs = BaseDirs::new();
     let file_utils = FileUtils::new(opts, state_dir, &allocator, &data);
 
-    // apply systems in parallel.
-    let results = config
-        .systems
-        .par_iter()
-        .map(|s| {
-            let units = s.apply(SystemInput {
+    // post-hook for all systems, mapped by id.
+    let mut post_systems = HashMap::new();
+    let mut all_units = Vec::new();
+    let mut pre_systems = Vec::new();
+    let mut errors = Vec::new();
+
+    pool.scope(|scope| {
+        let (tx, rx) = channel();
+
+        for system in &config.systems {
+            let tx = tx.clone();
+
+            let input = SystemInput {
                 root: &root,
                 base_dirs: base_dirs.as_ref(),
                 facts: &facts,
@@ -138,48 +150,70 @@ fn try_apply_config<'c>(
                 state: &state,
                 now: now,
                 opts: opts,
-            })?;
+            };
 
-            Ok((s, units))
-        }).collect::<Result<Vec<_>, Error>>()?;
+            scope.spawn(move |_| {
+                let res = system.apply(input.clone());
 
-    // post-hook for all systems, mapped by id.
-    let mut post_systems = HashMap::new();
-    let mut all_units = Vec::new();
-    let mut pre_systems = Vec::new();
+                let res = res
+                    .map_err(|e| (system, e))
+                    .map(|units| (system, units));
 
-    // Collect all units and map out a unit id to each system that can be used as a dependency.
-    for (system, mut units) in results {
-        if !system.requires().is_empty() {
-            // Unit that all contained units depend on.
-            // This unit finishes _before_ any unit in the system.
-            let pre = allocator.unit(Unit::System);
-
-            for unit in &mut units {
-                unit.dependencies.push(unit::Dependency::Unit(pre.id));
-            }
-
-            pre_systems.push((pre, system::Dependency::Transitive(system.requires())));
+                tx.send(res).expect("failed to send");
+            });
         }
 
-        if let Some(system_id) = system.id() {
-            if units.is_empty() {
-                // If system is empty, there is nothing to depend on.
-                post_systems.insert(system_id, system::Dependency::Transitive(system.requires()));
-                continue;
+        // Collect all units and map out a unit id to each system that can be used as a dependency.
+        for _ in 0..config.systems.len() {
+            let res = rx.recv().expect("failed to receive");
+
+            let (system, mut units) = match res {
+                Err(err) => {
+                    errors.push(err);
+                    continue;
+                }
+                Ok(result) => result,
+            };
+
+            if !system.requires().is_empty() {
+                // Unit that all contained units depend on.
+                // This unit finishes _before_ any unit in the system.
+                let pre = allocator.unit(Unit::System);
+
+                for unit in &mut units {
+                    unit.dependencies.push(unit::Dependency::Unit(pre.id));
+                }
+
+                pre_systems.push((pre, system::Dependency::Transitive(system.requires())));
             }
 
-            // Unit that other systems depend on.
-            // This unit finishes _after_ all units in the system have finished.
-            // System units depend on all units it contains.
-            let mut post = allocator.unit(Unit::System);
-            post.dependencies
-                .extend(units.iter().map(|u| unit::Dependency::Unit(u.id)));
-            post_systems.insert(system_id, system::Dependency::Direct(post.id));
-            all_units.push(post);
+            if let Some(system_id) = system.id() {
+                if units.is_empty() {
+                    // If system is empty, there is nothing to depend on.
+                    post_systems.insert(system_id, system::Dependency::Transitive(system.requires()));
+                    continue;
+                }
+
+                // Unit that other systems depend on.
+                // This unit finishes _after_ all units in the system have finished.
+                // System units depend on all units it contains.
+                let mut post = allocator.unit(Unit::System);
+                post.dependencies
+                    .extend(units.iter().map(|u| unit::Dependency::Unit(u.id)));
+                post_systems.insert(system_id, system::Dependency::Direct(post.id));
+                all_units.push(post);
+            }
+
+            all_units.extend(units);
+        }
+    });
+
+    if !errors.is_empty() {
+        for (_, e) in errors.into_iter() {
+            report_error(e);
         }
 
-        all_units.extend(units);
+        bail!("Failed to run all systems");
     }
 
     // Wire up systems that have requires.
@@ -194,76 +228,80 @@ fn try_apply_config<'c>(
     let mut errors = Vec::new();
     let mut i = 0;
 
-    while let Some(stage) = scheduler.stage()? {
-        i += 1;
+    // Note: convert into a scoped pool that feeds units to be scheduled.
+    pool.install(|| {
+        while let Some(stage) = scheduler.stage() {
+            i += 1;
 
-        if log::log_enabled!(log::Level::Trace) {
-            log::trace!(
-                "Running stage #{} ({} unit(s)) (thread_local: {})",
-                i,
-                stage.units.len(),
-                stage.thread_local
-            );
+            if log::log_enabled!(log::Level::Trace) {
+                log::trace!(
+                    "Running stage #{} ({} unit(s)) (thread_local: {})",
+                    i,
+                    stage.units.len(),
+                    stage.thread_local
+                );
 
-            for (i, unit) in stage.units.iter().enumerate() {
-                log::trace!("{:2}: {}", i, unit);
-            }
-        }
-
-        if stage.thread_local {
-            for unit in stage.units {
-                let mut s = State::new(&config, now);
-
-                match unit.apply(UnitInput {
-                    data: &data,
-                    packages: &packages,
-                    read_state: &state,
-                    state: &mut s,
-                    now,
-                }) {
-                    Ok(()) => {
-                        scheduler.mark(unit);
-                        state.extend(s);
-                    }
-                    Err(e) => {
-                        errors.push((unit, e));
-                    }
+                for (i, unit) in stage.units.iter().enumerate() {
+                    log::trace!("{:2}: {}", i, unit);
                 }
             }
 
-            continue;
-        }
+            if stage.thread_local {
+                for unit in stage.units {
+                    let mut s = State::new(&config, now);
 
-        let results = stage
-            .units
-            .into_par_iter()
-            .map(|unit| {
-                let mut s = State::new(&config, now);
+                    match unit.apply(UnitInput {
+                        data: &data,
+                        packages: &packages,
+                        read_state: &state,
+                        state: &mut s,
+                        now,
+                    }) {
+                        Ok(()) => {
+                            scheduler.mark(unit);
+                            state.extend(s);
+                        }
+                        Err(e) => {
+                            errors.push((unit, e));
+                        }
+                    }
+                }
 
-                let res = unit.apply(UnitInput {
-                    data: &data,
-                    packages: &packages,
-                    read_state: &state,
-                    state: &mut s,
-                    now,
-                });
+                continue;
+            }
 
+            let results = stage
+                .units
+                .into_par_iter()
+                .map(|unit| {
+                    let mut s = State::new(&config, now);
+
+                    let res = unit.apply(UnitInput {
+                        data: &data,
+                        packages: &packages,
+                        read_state: &state,
+                        state: &mut s,
+                        now,
+                    });
+
+                    match res {
+                        Ok(()) => Ok((unit, s)),
+                        Err(e) => Err((unit, e)),
+                    }
+                })
+                .collect::<Vec<Result<_, _>>>();
+
+            for res in results {
                 match res {
-                    Ok(()) => Ok((unit, s)),
-                    Err(e) => Err((unit, e)),
+                    Ok((unit, s)) => {
+                        state.extend(s);
+                        scheduler.mark(unit);
+                    }
+                    Err((unit, e)) => errors.push((unit, e)),
                 }
-            }).collect::<Vec<Result<_, _>>>();
-
-        for res in results {
-            match res {
-                Ok((unit, s)) => {
-                    state.extend(s);
-                    scheduler.mark(unit);
-                }
-                Err((unit, e)) => errors.push((unit, e)),
             }
         }
-    }
+    });
 
     if !errors.is_empty() {
         for (i, (unit, e)) in errors.into_iter().enumerate() {
