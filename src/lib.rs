@@ -1,5 +1,3 @@
-#[macro_use]
-mod macros;
 mod command;
 mod config;
 pub mod environment;
@@ -18,6 +16,6 @@ pub mod unit;
 
 pub use crate::config::Config;
 pub use crate::file_operations::{Load, Save};
-pub use crate::file_utils::FileUtils;
+pub use crate::file_utils::{FileUtils, GlobalFileUtils};
 pub use crate::state::{DiskState, State};
 pub use crate::template::Template;

@@ -3,6 +3,7 @@ use crate::{
 };
 use failure::{bail, Error};
 use serde_derive::Deserialize;
+use std::fmt;
 use std::fs;
 
 /// Builds one unit for every directory and file that needs to be copied.
@@ -11,7 +12,7 @@ system_struct! {
         #[doc="Where to copy from."]
         pub from: Template,
         #[doc="Where to copy to."]
-        pub to: Option<Template>,
+        pub to: Template,
         #[serde(default)]
         #[doc="If we should treat files as templates."]
         pub templates: bool,
@@ -41,12 +42,9 @@ impl CopyDir {
         };
 
         // resolve destination, if unspecified defaults to relative current directory.
-        let to = match self.to.as_ref() {
-            Some(to) => match to.as_path(root, base_dirs, facts, environment)? {
-                Some(to) => to,
-                None => return Ok(units),
-            },
-            None => root.canonicalize()?,
+        let to = match self.to.as_path(root, base_dirs, facts, environment)? {
+            Some(to) => to,
+            None => return Ok(units),
         };
 
         for e in ignore::WalkBuilder::new(&from).hidden(false).build() {
@@ -92,5 +90,11 @@ impl CopyDir {
         }
 
         return Ok(units);
+    }
+}
+
+impl fmt::Display for CopyDir {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "copy directory from `{}` to `{}`", self.from, self.to)
     }
 }

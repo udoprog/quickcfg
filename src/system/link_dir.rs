@@ -3,14 +3,15 @@ use crate::{
 };
 use failure::Error;
 use serde_derive::Deserialize;
+use std::fmt;
 
-/// Builds one unit for every directory and entry that needs to be linked.
+/// Recursively creates directories and copies files.
 system_struct! {
     LinkDir {
         #[doc="Where to link files from."]
         pub from: Template,
         #[doc="Where to link files to."]
-        pub to: Option<Template>,
+        pub to: Template,
     }
 }
 
@@ -36,12 +37,9 @@ impl LinkDir {
         };
 
         // resolve destination, if unspecified defaults to relative current directory.
-        let to = match self.to.as_ref() {
-            Some(to) => match to.as_path(root, base_dirs, facts, environment)? {
-                Some(to) => to,
-                None => return Ok(units),
-            },
-            None => root.canonicalize()?,
+        let to = match self.to.as_path(root, base_dirs, facts, environment)? {
+            Some(to) => to,
+            None => return Ok(units),
         };
 
         for e in ignore::WalkBuilder::new(&from).hidden(false).build() {
@@ -72,5 +70,11 @@ impl LinkDir {
         }
 
         return Ok(units);
+    }
+}
+
+impl fmt::Display for LinkDir {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "link directory `{}` to `{}`", self.from, self.to)
     }
 }

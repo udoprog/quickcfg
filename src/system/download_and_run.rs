@@ -6,6 +6,7 @@ use crate::{
 };
 use failure::{format_err, Error};
 use serde_derive::Deserialize;
+use std::fmt;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -88,5 +89,11 @@ impl DownloadAndRun {
         units.push(run);
 
         return Ok(units);
+    }
+}
+
+impl fmt::Display for DownloadAndRun {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "download and run `{}`", self.url)
     }
 }

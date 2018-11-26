@@ -3,6 +3,7 @@ use crate::{
 };
 use failure::Error;
 use serde_derive::Deserialize;
+use std::fmt;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -54,5 +55,11 @@ impl Link {
 
         units.extend(file_utils.symlink(&path, link, m.as_ref())?);
         Ok(units)
+    }
+}
+
+impl fmt::Display for Link {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "link `{}` to `{}`", self.path, self.link)
     }
 }

@@ -6,6 +6,7 @@ use crate::{
 use failure::{format_err, Error};
 use serde_derive::Deserialize;
 use std::collections::{BTreeSet, HashSet};
+use std::fmt;
 
 /// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
@@ -111,5 +112,14 @@ impl InstallPackages {
         unit.thread_local = thread_local;
         units.push(unit);
         return Ok(units);
+    }
+}
+
+impl fmt::Display for InstallPackages {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.provider.as_ref() {
+            Some(provider) => write!(fmt, "install packages using provider `{}`", provider),
+            None => write!(fmt, "install packages using primary provider"),
+        }
     }
 }

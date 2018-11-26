@@ -4,15 +4,79 @@
 use crate::{
     hierarchy::Data,
     opts::Opts,
-    unit::{CopyTemplate, CopyFile, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId},
+    system::System,
+    unit::{
+        CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId,
+    },
 };
 use failure::{bail, format_err, Error, ResultExt};
 use fxhash::FxHashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 use std::time::SystemTime;
+
+/// Utilities to build units for creating directories.
+pub struct GlobalFileUtils<'a> {
+    opts: &'a Opts,
+    state_dir: PathBuf,
+    allocator: &'a UnitAllocator,
+    data: &'a Data,
+    pub valid: bool,
+    pub directories: FxHashMap<PathBuf, Vec<&'a System>>,
+    pub files: FxHashMap<PathBuf, Vec<&'a System>>,
+}
+
+impl<'a> GlobalFileUtils<'a> {
+    /// Create new, thread-safe file utilities.
+    pub fn new(
+        opts: &'a Opts,
+        state_dir: &Path,
+        allocator: &'a UnitAllocator,
+        data: &'a Data,
+    ) -> GlobalFileUtils<'a> {
+        GlobalFileUtils {
+            opts,
+            state_dir: state_dir.to_owned(),
+            allocator,
+            data,
+            valid: true,
+            directories: FxHashMap::default(),
+            files: FxHashMap::default(),
+        }
+    }
+
+    /// Create a new child utility.
+    pub fn new_child(&self) -> FileUtils<'a> {
+        FileUtils {
+            opts: self.opts,
+            state_dir: self.state_dir.to_owned(),
+            allocator: self.allocator,
+            data: self.data,
+            directories: FxHashMap::default(),
+            files: FxHashMap::default(),
+        }
+    }
+
+    /// Extend the state of this file utils with another.
+    /// This sets `valid` to false if there are multiple systems modifying the same directory or
+    /// file, and keeps track of which systems are trying to do that.
+    pub fn extend(&mut self, system: &'a System, other: FileUtils) -> bool {
+        for (key, _) in other.directories {
+            let systems = self.directories.entry(key.clone()).or_default();
+            self.valid = self.valid && systems.is_empty();
+            systems.push(system);
+        }
+
+        for (key, _) in other.files {
+            let systems = self.files.entry(key.clone()).or_default();
+            self.valid = self.valid && systems.is_empty();
+            systems.push(system);
+        }
+
+        self.valid
+    }
+}
 
 /// Utilities to build units for creating directories.
 pub struct FileUtils<'a> {
@@ -20,42 +84,36 @@ pub struct FileUtils<'a> {
     state_dir: PathBuf,
     allocator: &'a UnitAllocator,
     data: &'a Data,
-    directories: RwLock<FxHashMap<PathBuf, UnitId>>,
-    files: RwLock<FxHashMap<PathBuf, UnitId>>,
+    directories: FxHashMap<PathBuf, UnitId>,
+    files: FxHashMap<PathBuf, UnitId>,
 }
 
 impl<'a> FileUtils<'a> {
-    /// Create new, thread-safe file utilities.
-    pub fn new(
-        opts: &'a Opts,
-        state_dir: &Path,
-        allocator: &'a UnitAllocator,
-        data: &'a Data,
-    ) -> FileUtils<'a> {
-        FileUtils {
-            opts,
-            state_dir: state_dir.to_owned(),
-            allocator,
-            data,
-            directories: RwLock::new(FxHashMap::default()),
-            files: RwLock::new(FxHashMap::default()),
-        }
-    }
-
     /// Access or allocate a file dependency of the given path.
-    pub fn file_dependency(&self, path: &Path) -> Result<Dependency, Error> {
-        self.get_or_insert(&self.files, path).map(Dependency::File)
+    pub fn file_dependency(&mut self, path: &Path) -> Dependency {
+        if let Some(id) = self.files.get(path).cloned() {
+            return Dependency::File(id);
+        }
+
+        let id = self.allocator.allocate();
+        self.files.insert(path.to_owned(), id);
+        Dependency::File(id)
     }
 
     /// Access or allocate a directory dependency of the given path.
-    pub fn dir_dependency(&self, path: &Path) -> Result<Dependency, Error> {
-        self.get_or_insert(&self.directories, path)
-            .map(Dependency::Dir)
+    pub fn dir_dependency(&mut self, path: &Path) -> Dependency {
+        if let Some(id) = self.directories.get(path).cloned() {
+            return Dependency::Dir(id);
+        }
+
+        let id = self.allocator.allocate();
+        self.directories.insert(path.to_owned(), id);
+        Dependency::Dir(id)
     }
 
     /// Try to create a symlink.
     pub fn symlink(
-        &self,
+        &mut self,
         path: &Path,
         link: PathBuf,
         meta: Option<&fs::Metadata>,
@@ -96,11 +154,11 @@ impl<'a> FileUtils<'a> {
 
         if let Some(parent) = path.parent() {
             if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent)?);
+                unit.dependencies.push(self.dir_dependency(parent));
             }
         }
 
-        unit.provides.push(self.file_dependency(path)?);
+        unit.provides.push(self.file_dependency(path));
         Ok(Some(unit))
     }
 
@@ -111,7 +169,7 @@ impl<'a> FileUtils<'a> {
     /// * The destination file does not exist.
     /// * The destination file has a modified timestamp less than the source file.
     pub fn copy_file(
-        &self,
+        &mut self,
         from: &Path,
         from_meta: fs::Metadata,
         to: &Path,
@@ -124,43 +182,34 @@ impl<'a> FileUtils<'a> {
         };
 
         let mut unit = match template {
-            true => {
-                self.allocator.unit(CopyTemplate {
-                    from: from.to_owned(),
-                    from_modified,
-                    to: to.to_owned(),
-                    to_exists: to_meta.is_some(),
-                })
-            },
-            false => {
-                self.allocator.unit(CopyFile {
-                    from: from.to_owned(),
-                    from_modified,
-                    to: to.to_owned(),
-                })
-            },
+            true => self.allocator.unit(CopyTemplate {
+                from: from.to_owned(),
+                from_modified,
+                to: to.to_owned(),
+                to_exists: to_meta.is_some(),
+            }),
+            false => self.allocator.unit(CopyFile {
+                from: from.to_owned(),
+                from_modified,
+                to: to.to_owned(),
+            }),
         };
 
         if let Some(parent) = to.parent() {
             if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent)?);
+                unit.dependencies.push(self.dir_dependency(parent));
             }
         }
 
-        unit.provides.push(self.file_dependency(to)?);
+        unit.provides.push(self.file_dependency(to));
         Ok(Some(unit))
     }
 
     /// Recursively set up units with dependencies to create the given directories.
-    pub fn create_dir_all(&self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
+    pub fn create_dir_all(&mut self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
         let dirs = {
-            let directories = self
-                .directories
-                .read()
-                .map_err(|_| format_err!("lock poisoned"))?;
-
             // Directory is already being created.
-            if directories.contains_key(dir) {
+            if self.directories.contains_key(dir) {
                 return Ok(vec![]);
             }
 
@@ -179,7 +228,7 @@ impl<'a> FileUtils<'a> {
                     break;
                 }
 
-                if directories.contains_key(parent) {
+                if self.directories.contains_key(parent) {
                     break;
                 }
 
@@ -190,26 +239,21 @@ impl<'a> FileUtils<'a> {
             dirs
         };
 
-        let mut directories = self
-            .directories
-            .write()
-            .map_err(|_| format_err!("lock poisoned"))?;
-
         let mut out = Vec::new();
 
         for dir in dirs.into_iter().rev() {
             // needs to re-check now that we have mutable access.
-            if directories.contains_key(dir) {
+            if self.directories.contains_key(dir) {
                 continue;
             }
 
             let mut unit = self.allocator.unit(CreateDir(dir.to_owned()));
-            directories.insert(dir.to_owned(), unit.id);
+            self.directories.insert(dir.to_owned(), unit.id);
             unit.provides.push(Dependency::Dir(unit.id));
 
             if let Some(parent) = dir.parent() {
                 unit.dependencies
-                    .extend(directories.get(parent).cloned().map(Dependency::Dir));
+                    .extend(self.directories.get(parent).cloned().map(Dependency::Dir));
             }
 
             out.push(unit);
@@ -368,30 +412,5 @@ impl<'a> FileUtils<'a> {
         }
 
         Ok(None)
-    }
-
-    #[inline]
-    fn get_or_insert<K: ?Sized>(
-        &self,
-        map: &RwLock<FxHashMap<K::Owned, UnitId>>,
-        k: &K,
-    ) -> Result<UnitId, Error>
-    where
-        K: std::hash::Hash + Eq + ToOwned,
-        K::Owned: std::hash::Hash + Eq,
-    {
-        {
-            let m = map.read().map_err(|_| format_err!("lock poisoned"))?;
-
-            if let Some(id) = m.get(k).cloned() {
-                return Ok(id);
-            }
-        }
-
-        let mut m = map.write().map_err(|_| format_err!("lock poisoned"))?;
-
-        let id = self.allocator.allocate();
-        m.insert(k.to_owned(), id);
-        Ok(id)
     }
 }

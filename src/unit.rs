@@ -1,8 +1,8 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State,
-    file_utils::FileUtils,
+    file_utils::FileUtils, git::Git, hierarchy::Data, packages, packages::PackageManager,
+    state::State,
 };
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
@@ -202,14 +202,19 @@ pub struct CopyFile {
 
 impl fmt::Display for CopyFile {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "copy file {} -> {}", self.from.display(), self.to.display())
+        write!(
+            fmt,
+            "copy file {} -> {}",
+            self.from.display(),
+            self.to.display()
+        )
     }
 }
 
 impl CopyFile {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
-        use std::io;
         use std::fs::File;
+        use std::io;
 
         let CopyFile {
             ref from,
@@ -245,7 +250,12 @@ pub struct CopyTemplate {
 
 impl fmt::Display for CopyTemplate {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "template file {} -> {}", self.from.display(), self.to.display())
+        write!(
+            fmt,
+            "template file {} -> {}",
+            self.from.display(),
+            self.to.display()
+        )
     }
 }
 

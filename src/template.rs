@@ -4,12 +4,30 @@ use directories::BaseDirs;
 use failure::{bail, format_err, Error};
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// A loaded template string.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Template {
     parts: Vec<Part>,
+}
+
+impl fmt::Display for Template {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use self::Part::*;
+
+        for part in &self.parts {
+            match *part {
+                Protocol(ref proto) => write!(fmt, "{}://", proto)?,
+                Static(ref string) => string.fmt(fmt)?,
+                Variable(ref var) => write!(fmt, "{{{}}}", var)?,
+                Environ(ref env) => write!(fmt, "${}", env)?,
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// A single part in a template string.

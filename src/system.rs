@@ -14,9 +14,12 @@ use directories::BaseDirs;
 use failure::Error;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::Path;
 use std::time::SystemTime;
 
+#[macro_use]
+mod macros;
 mod copy_dir;
 mod download_and_run;
 mod git_sync;
@@ -30,6 +33,63 @@ use self::git_sync::GitSync;
 use self::install_packages::InstallPackages;
 use self::link::Link;
 use self::link_dir::LinkDir;
+
+macro_rules! system_impl {
+    ($($name:ident,)*) => {
+        impl System {
+            /// Get the id of this system.
+            pub fn id(&self) -> Option<&str> {
+                use self::System::*;
+
+                match *self {
+                    $($name(ref system) => system.id(),)*
+                }
+            }
+
+            /// Get all things that this system depends on.
+            pub fn requires(&self) -> &[String] {
+                use self::System::*;
+
+                match *self {
+                    $($name(ref system) => system.requires(),)*
+                }
+            }
+
+            /// Apply changes for this system.
+            #[allow(unused)]
+            pub fn apply<E>(&self, input: $crate::system::SystemInput<E>)
+                -> Result<Vec<$crate::system::SystemUnit>, Error>
+            where
+                E: Copy + $crate::environment::Environment,
+            {
+                use failure::{ResultExt, format_err};
+                use self::System::*;
+
+                let res = match *self {
+                    $($name(ref system) => system.apply(input),)*
+                };
+
+                Ok(res.with_context(|_| format_err!("Failed to run system: {:?}", self))?)
+            }
+        }
+
+        impl fmt::Display for System {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                match *self {
+                    $(
+                    System::$name(ref system) => {
+                        if let Some(id) = system.id() {
+                            write!(fmt, "{}: {}", id, system)
+                        } else {
+                            system.fmt(fmt)
+                        }
+                    }
+                    )*
+                }
+            }
+        }
+    }
+}
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
@@ -48,20 +108,17 @@ pub enum System {
     GitSync(GitSync),
 }
 
-impl System {
-    system_functions![
-        CopyDir,
-        LinkDir,
-        InstallPackages,
-        DownloadAndRun,
-        Link,
-        GitSync,
-    ];
-}
+system_impl![
+    CopyDir,
+    LinkDir,
+    InstallPackages,
+    DownloadAndRun,
+    Link,
+    GitSync,
+];
 
 /// All inputs for a system.
-#[derive(Clone)]
-pub struct SystemInput<'a, E>
+pub struct SystemInput<'a, 'f, E>
 where
     E: e::Environment,
 {
@@ -80,7 +137,7 @@ where
     /// Unit allocator to use.
     pub allocator: &'a UnitAllocator,
     /// File utilities.
-    pub file_utils: &'a FileUtils<'a>,
+    pub file_utils: &'a mut FileUtils<'f>,
     /// State accessor.
     pub state: &'a State<'a>,
     /// Current time.

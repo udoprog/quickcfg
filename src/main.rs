@@ -9,7 +9,7 @@ use quickcfg::{
     packages, stage,
     system::{self, SystemInput},
     unit::{self, Unit, UnitAllocator, UnitInput},
-    Config, DiskState, FileUtils, Load, Save, State,
+    Config, DiskState, GlobalFileUtils, Load, Save, State,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -98,7 +98,6 @@ fn try_apply_config<'a>(
     mut state: State<'a>,
 ) -> Result<State<'a>, Error> {
     use rayon::prelude::*;
-    use std::sync::mpsc::channel;
 
     let pool = rayon::ThreadPoolBuilder::new()
         .build()
@@ -124,7 +123,7 @@ fn try_apply_config<'a>(
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
-    let file_utils = FileUtils::new(opts, state_dir, &allocator, &data);
+    let mut global_file_utils = GlobalFileUtils::new(opts, state_dir, &allocator, &data);
 
     // post-hook for all systems, mapped by id.
     let mut post_systems = HashMap::new();
@@ -132,13 +131,11 @@ fn try_apply_config<'a>(
     let mut pre_systems = Vec::new();
     let mut errors = Vec::new();
 
-    pool.scope(|scope| {
-        let (tx, rx) = channel();
+    pool.install(|| {
+        let res = config.systems.par_iter().map(|system| {
+            let mut file_utils = global_file_utils.new_child();
 
-        for system in &config.systems {
-            let tx = tx.clone();
-
-            let input = SystemInput {
+            let res = system.apply(SystemInput {
                 root: &root,
                 base_dirs: base_dirs.as_ref(),
                 facts: &facts,
@@ -146,32 +143,31 @@ fn try_apply_config<'a>(
                 packages: &packages,
                 environment,
                 allocator: &allocator,
-                file_utils: &file_utils,
+                file_utils: &mut file_utils,
                 state: &state,
                 now: now,
                 opts: opts,
-            };
-
-            scope.spawn(move |_| {
-                let res = system.apply(input.clone());
-
-                let res = res.map_err(|e| (system, e)).map(|units| (system, units));
-
-                tx.send(res).expect("failed to send");
             });
-        }
+
+            match res {
+                Ok(units) => Ok((system, file_utils, units)),
+                Err(e) => Err((system, e)),
+            }
+        });
 
         // Collect all units and map out a unit id to each system that can be used as a dependency.
-        for _ in 0..config.systems.len() {
-            let res = rx.recv().expect("failed to receive");
-
-            let (system, mut units) = match res {
-                Err(err) => {
-                    errors.push(err);
+        for res in res.collect::<Vec<_>>() {
+            let (system, system_file_utils, mut units) = match res {
+                Ok(result) => result,
+                Err((system, e)) => {
+                    errors.push((system, e));
                     continue;
                 }
-                Ok(result) => result,
             };
+
+            if !global_file_utils.extend(system, system_file_utils) {
+                continue;
+            }
 
             if !system.requires().is_empty() {
                 // Unit that all contained units depend on.
@@ -207,8 +203,37 @@ fn try_apply_config<'a>(
         }
     });
 
+    if !global_file_utils.valid {
+        for (path, systems) in global_file_utils.directories {
+            if systems.len() == 1 {
+                continue;
+            }
+
+            log::error!("Conflicting modification to directory: {}", path.display());
+
+            for (i, system) in systems.into_iter().enumerate() {
+                log::error!("System {:02}: {}", i, system);
+            }
+        }
+
+        for (path, systems) in global_file_utils.files {
+            if systems.len() == 1 {
+                continue;
+            }
+
+            log::error!("Conflicting modification to file: {}", path.display());
+
+            for (i, system) in systems.into_iter().enumerate() {
+                log::error!("System {:02}: {}", i, system);
+            }
+        }
+
+        bail!("Multiple systems registered conflicting file modifications");
+    }
+
     if !errors.is_empty() {
-        for (_, e) in errors.into_iter() {
+        for (system, e) in errors.into_iter() {
+            log::error!("System failed: {}", system);
             report_error(e);
         }
 
