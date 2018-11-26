@@ -10,6 +10,7 @@ pub mod git;
 pub mod hierarchy;
 pub mod opts;
 pub mod packages;
+pub mod scheduler;
 pub mod stage;
 mod state;
 pub mod system;
