@@ -53,16 +53,16 @@ impl UnitAllocator {
 }
 
 /// All inputs for a system.
-pub struct UnitInput<'a, 's, 'c: 's> {
+pub struct UnitInput<'a, 'state: 'a> {
     /// Primary package manager.
     pub packages: &'a packages::Provider,
     /// Data loaded from the hierarchy.
     pub data: &'a Data,
     /// Read-only state.
     /// If none, the read state is the mutated state.
-    pub read_state: &'s State<'c>,
+    pub read_state: &'a State<'state>,
     /// Unit-local state that can be mutated.
-    pub state: &'s mut State<'c>,
+    pub state: &'a mut State<'state>,
     /// Current timestamp.
     pub now: &'a SystemTime,
 }

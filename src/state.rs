@@ -31,7 +31,7 @@ pub struct DiskState {
 
 impl DiskState {
     /// Convert into a state.
-    pub fn to_state<'c>(self, config: &'c Config, now: &'c SystemTime) -> State<'c> {
+    pub fn to_state<'a>(self, config: &'a Config, now: &'a SystemTime) -> State<'a> {
         State {
             dirty: false,
             last_update: self.last_update,
@@ -47,7 +47,7 @@ impl DiskState {
 /// This keeps track of any changes with the dirty flag, which is an indication whether it should
 /// be serialized or not.
 #[derive(Debug, PartialEq, Eq)]
-pub struct State<'c> {
+pub struct State<'a> {
     pub dirty: bool,
     /// Last time git was updated.
     pub last_update: BTreeMap<String, SystemTime>,
@@ -56,13 +56,13 @@ pub struct State<'c> {
     /// Things that have been tested against a hash.
     pub hashes: BTreeMap<String, Hashed>,
     /// The current configuration.
-    pub config: &'c Config,
+    pub config: &'a Config,
     /// Current timestamp.
-    pub now: &'c SystemTime,
+    pub now: &'a SystemTime,
 }
 
-impl<'c> State<'c> {
-    pub fn new(config: &'c Config, now: &'c SystemTime) -> Self {
+impl<'a> State<'a> {
+    pub fn new(config: &'a Config, now: &'a SystemTime) -> Self {
         State {
             dirty: Default::default(),
             last_update: Default::default(),
