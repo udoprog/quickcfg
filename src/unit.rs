@@ -1,7 +1,8 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State, FileUtils,
+    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State,
+    file_utils::FileUtils,
 };
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
@@ -107,6 +108,7 @@ macro_rules! unit {
 
 unit![
     CopyFile,
+    CopyTemplate,
     Symlink,
     CreateDir,
     InstallPackages,
@@ -190,24 +192,64 @@ impl From<CreateDir> for Unit {
 /// The configuration for a unit to copy a single file.
 #[derive(Debug, Hash)]
 pub struct CopyFile {
+    /// The source file.
     pub from: PathBuf,
+    /// Source file modification time.
+    pub from_modified: SystemTime,
+    /// The destination file.
     pub to: PathBuf,
-    pub templates: bool,
 }
 
 impl fmt::Display for CopyFile {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            fmt,
-            "copy file {} -> {} (template: {})",
-            self.from.display(),
-            self.to.display(),
-            self.templates
-        )
+        write!(fmt, "copy file {} -> {}", self.from.display(), self.to.display())
     }
 }
 
 impl CopyFile {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        use std::io;
+        use std::fs::File;
+
+        let CopyFile {
+            ref from,
+            ref from_modified,
+            ref to,
+        } = *self;
+
+        log::info!("{} -> {}", from.display(), to.display());
+        io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
+        // make sure timestamp is in sync.
+        FileUtils::touch(&to, from_modified)
+    }
+}
+
+impl From<CopyFile> for Unit {
+    fn from(value: CopyFile) -> Unit {
+        Unit::CopyFile(value)
+    }
+}
+
+/// The configuration for a unit to copy a single file.
+#[derive(Debug, Hash)]
+pub struct CopyTemplate {
+    /// The source file.
+    pub from: PathBuf,
+    /// Source file modification time.
+    pub from_modified: SystemTime,
+    /// The destination file.
+    pub to: PathBuf,
+    /// If the destination file exists, we assume that its content is the same.
+    pub to_exists: bool,
+}
+
+impl fmt::Display for CopyTemplate {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "template file {} -> {}", self.from.display(), self.to.display())
+    }
+}
+
+impl CopyTemplate {
     /// Construct the ID for this unit.
     fn id(&self) -> String {
         use std::hash::{Hash, Hasher};
@@ -215,7 +257,7 @@ impl CopyFile {
         let mut state = fxhash::FxHasher64::default();
         self.hash(&mut state);
 
-        format!("copy-file/{:x}", state.finish())
+        format!("copy-template/{:x}", state.finish())
     }
 
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
@@ -223,26 +265,26 @@ impl CopyFile {
         use std::fs::{self, File};
         use std::io::{self, Cursor, Write};
 
-        let CopyFile {
+        let CopyTemplate {
             ref from,
+            ref from_modified,
             ref to,
-            templates,
+            to_exists,
         } = *self;
 
         let UnitInput {
             data,
             read_state,
             state,
-            now,
             ..
         } = input;
 
-        // just copy file if not a template.
-        if !templates {
-            log::info!("{} -> {}", from.display(), to.display());
-            io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
-            return Ok(());
-        }
+        // We do some extra work in here that we would usually split up into more units.
+        // The reason is that we can't efficiently determine if that work should be done without
+        // doing a lot of it up front.
+        //
+        // This includes:
+        // * Reading the template file to determine which database variables to use.
 
         let content = fs::read_to_string(&from)
             .map_err(|e| format_err!("failed to read path: {}: {}", from.display(), e))?;
@@ -258,10 +300,11 @@ impl CopyFile {
         let id = self.id();
         let hash = (&data, &content);
 
-        if read_state.is_hash_fresh(&id, &hash)? {
+        if to_exists && read_state.is_hash_fresh(&id, &hash)? {
             // Nothing about the template would change, only update the modified time of the file.
             log::info!("touching {}", to.display());
-            return FileUtils::update_timestamps(now, &to);
+            // only need to update timestamp.
+            return FileUtils::touch(&to, from_modified);
         }
 
         let reg = Handlebars::new();
@@ -281,7 +324,7 @@ impl CopyFile {
         log::info!("{} -> {} (template)", from.display(), to.display());
         File::create(&to)?.write_all(&out)?;
         state.touch_hash(&id, &hash)?;
-        return Ok(());
+        return FileUtils::touch(&to, from_modified);
 
         pub struct WriteOutput<W: Write> {
             write: W,
@@ -301,9 +344,9 @@ impl CopyFile {
     }
 }
 
-impl From<CopyFile> for Unit {
-    fn from(value: CopyFile) -> Unit {
-        Unit::CopyFile(value)
+impl From<CopyTemplate> for Unit {
+    fn from(value: CopyTemplate) -> Unit {
+        Unit::CopyTemplate(value)
     }
 }
 

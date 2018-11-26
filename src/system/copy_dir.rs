@@ -74,10 +74,13 @@ impl CopyDir {
             }
 
             if source_type.is_file() {
-                if file_utils.should_copy_file(&from, &to_path, to.as_ref(), self.templates)? {
-                    units.push(file_utils.copy_file(&from_path, &to_path, self.templates)?);
-                }
-
+                units.extend(file_utils.copy_file(
+                    &from_path,
+                    from,
+                    &to_path,
+                    to.as_ref(),
+                    self.templates,
+                )?);
                 continue;
             }
 

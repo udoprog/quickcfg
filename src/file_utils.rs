@@ -4,7 +4,7 @@
 use crate::{
     hierarchy::Data,
     opts::Opts,
-    unit::{CopyFile, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId},
+    unit::{CopyTemplate, CopyFile, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId},
 };
 use failure::{bail, format_err, Error, ResultExt};
 use fxhash::FxHashMap;
@@ -110,12 +110,36 @@ impl<'a> FileUtils<'a> {
     ///
     /// * The destination file does not exist.
     /// * The destination file has a modified timestamp less than the source file.
-    pub fn copy_file(&self, from: &Path, to: &Path, templates: bool) -> Result<SystemUnit, Error> {
-        let mut unit = self.allocator.unit(CopyFile {
-            from: from.to_owned(),
-            to: to.to_owned(),
-            templates,
-        });
+    pub fn copy_file(
+        &self,
+        from: &Path,
+        from_meta: fs::Metadata,
+        to: &Path,
+        to_meta: Option<&fs::Metadata>,
+        template: bool,
+    ) -> Result<Option<SystemUnit>, Error> {
+        let from_modified = match self.should_copy_file(&from_meta, &to, to_meta, template)? {
+            Some(modified) => modified,
+            None => return Ok(None),
+        };
+
+        let mut unit = match template {
+            true => {
+                self.allocator.unit(CopyTemplate {
+                    from: from.to_owned(),
+                    from_modified,
+                    to: to.to_owned(),
+                    to_exists: to_meta.is_some(),
+                })
+            },
+            false => {
+                self.allocator.unit(CopyFile {
+                    from: from.to_owned(),
+                    from_modified,
+                    to: to.to_owned(),
+                })
+            },
+        };
 
         if let Some(parent) = to.parent() {
             if !parent.is_dir() {
@@ -124,7 +148,7 @@ impl<'a> FileUtils<'a> {
         }
 
         unit.provides.push(self.file_dependency(to)?);
-        Ok(unit)
+        Ok(Some(unit))
     }
 
     /// Recursively set up units with dependencies to create the given directories.
@@ -228,45 +252,6 @@ impl<'a> FileUtils<'a> {
         Ok(false)
     }
 
-    /// Test if we should copy the file.
-    ///
-    /// This is true if:
-    ///
-    /// * The destination file does not exist.
-    /// * The destination file has a modified timestamp less than the source file.
-    pub fn should_copy_file(
-        &self,
-        from: &fs::Metadata,
-        to_path: &Path,
-        to: Option<&fs::Metadata>,
-        template: bool,
-    ) -> Result<bool, Error> {
-        let to = match to {
-            Some(to) => to,
-            None => return Ok(true),
-        };
-
-        if !to.is_file() {
-            bail!("Exists but is not a file: {}", to_path.display());
-        }
-
-        let to_modified = to.modified()?;
-
-        if from.modified()? > to_modified {
-            return Ok(true);
-        }
-
-        // if a template, we want to check if hierarchy was modified.
-        if template {
-            match self.data.last_modified.as_ref() {
-                Some(data_modified) if *data_modified > to_modified => return Ok(true),
-                _ => {}
-            }
-        }
-
-        Ok(false)
-    }
-
     /// Construct a relative path from a provided base directory path to the provided path
     ///
     /// ```rust
@@ -328,16 +313,61 @@ impl<'a> FileUtils<'a> {
         Some(comps.iter().map(|c| c.as_os_str()).collect())
     }
 
-    /// Update timestamps for the argument `to`, based on `from`.
-    pub fn update_timestamps(now: &SystemTime, path: &Path) -> Result<(), Error> {
+    /// Update timestamps for the given path.
+    pub fn touch(path: &Path, timestamp: &SystemTime) -> Result<(), Error> {
         use filetime::{self, FileTime};
 
-        let m_time = FileTime::from_system_time(now.clone());
-        let a_time = m_time.clone();
+        let accessed = FileTime::from_system_time(timestamp.clone());
+        let modified = accessed.clone();
 
-        filetime::set_file_times(path, a_time, m_time)
+        filetime::set_file_times(path, accessed, modified)
             .with_context(|_| format_err!("Failed to update timestamps for: {}", path.display()))?;
         return Ok(());
+    }
+
+    /// Test if we should copy the file.
+    ///
+    /// This is true if:
+    ///
+    /// * The destination file does not exist.
+    /// * The destination file has a modified timestamp less than the source file.
+    fn should_copy_file(
+        &self,
+        from: &fs::Metadata,
+        to: &Path,
+        to_meta: Option<&fs::Metadata>,
+        template: bool,
+    ) -> Result<Option<SystemTime>, Error> {
+        let from_modified = from.modified()?;
+
+        let to_meta = match to_meta {
+            Some(to_meta) => to_meta,
+            None => return Ok(Some(from_modified)),
+        };
+
+        if !to_meta.is_file() {
+            bail!("Exists but is not a file: {}", to.display());
+        }
+
+        let to_modified = to_meta.modified()?;
+
+        if template {
+            if let Some(modified) = self.data.last_modified.as_ref() {
+                if *modified != to_modified {
+                    return Ok(Some(modified.clone()));
+                }
+            } else {
+                if from_modified != to_modified {
+                    return Ok(Some(from_modified));
+                }
+            }
+        } else {
+            if from_modified != to_modified {
+                return Ok(Some(from_modified));
+            }
+        }
+
+        Ok(None)
     }
 
     #[inline]
