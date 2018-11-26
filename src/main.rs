@@ -203,33 +203,7 @@ fn try_apply_config<'a>(
         }
     });
 
-    if !global_file_utils.valid {
-        for (path, systems) in global_file_utils.directories {
-            if systems.len() == 1 {
-                continue;
-            }
-
-            log::error!("Conflicting modification to directory: {}", path.display());
-
-            for (i, system) in systems.into_iter().enumerate() {
-                log::error!("System {:02}: {}", i, system);
-            }
-        }
-
-        for (path, systems) in global_file_utils.files {
-            if systems.len() == 1 {
-                continue;
-            }
-
-            log::error!("Conflicting modification to file: {}", path.display());
-
-            for (i, system) in systems.into_iter().enumerate() {
-                log::error!("System {:02}: {}", i, system);
-            }
-        }
-
-        bail!("Multiple systems registered conflicting file modifications");
-    }
+    global_file_utils.validate()?;
 
     if !errors.is_empty() {
         for (system, e) in errors.into_iter() {

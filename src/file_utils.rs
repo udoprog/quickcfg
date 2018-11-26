@@ -76,6 +76,36 @@ impl<'a> GlobalFileUtils<'a> {
 
         self.valid
     }
+
+    /// Validate that we haven't created any conflicting files.
+    /// Logs details and errors in case duplicates are registered.
+    pub fn validate(self) -> Result<(), Error> {
+        if self.valid {
+            return Ok(());
+        }
+
+        for (path, systems) in self.directories {
+            if systems.len() > 1 {
+                log::error!("Conflicting modification to directory: {}", path.display());
+
+                for (i, system) in systems.into_iter().enumerate() {
+                    log::error!("System {:02}: {}", i, system);
+                }
+            }
+        }
+
+        for (path, systems) in self.files {
+            if systems.len() > 1 {
+                log::error!("Conflicting modification to file: {}", path.display());
+
+                for (i, system) in systems.into_iter().enumerate() {
+                    log::error!("System {:02}: {}", i, system);
+                }
+            }
+        }
+
+        bail!("Multiple systems registered conflicting file modifications");
+    }
 }
 
 /// Utilities to build units for creating directories.
