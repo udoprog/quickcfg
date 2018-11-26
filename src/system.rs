@@ -3,12 +3,12 @@
 use crate::{
     environment as e,
     facts::Facts,
-    file_utils::FileUtils,
     hierarchy::Data,
     opts::Opts,
     packages,
     state::State,
     unit::{self, SystemUnit, UnitAllocator, UnitId},
+    FileSystem,
 };
 use directories::BaseDirs;
 use failure::Error;
@@ -137,7 +137,7 @@ where
     /// Unit allocator to use.
     pub allocator: &'a UnitAllocator,
     /// File utilities.
-    pub file_utils: &'a mut FileUtils<'f>,
+    pub file_system: &'a mut FileSystem<'f>,
     /// State accessor.
     pub state: &'a State<'a>,
     /// Current time.

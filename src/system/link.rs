@@ -1,5 +1,5 @@
 use crate::{
-    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileUtils,
+    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::Error;
 use serde_derive::Deserialize;
@@ -26,7 +26,7 @@ impl Link {
             base_dirs,
             facts,
             environment,
-            file_utils,
+            file_system,
             ..
         } = input;
 
@@ -42,18 +42,18 @@ impl Link {
             None => return Ok(units),
         };
 
-        let m = FileUtils::try_open_meta(&path)?;
+        let m = FileSystem::try_open_meta(&path)?;
 
         // try to relativize link.
         let link = if link.is_absolute() {
             path.parent()
-                .and_then(|p| FileUtils::path_relative_from(&link, p))
+                .and_then(|p| FileSystem::path_relative_from(&link, p))
                 .unwrap_or_else(|| link)
         } else {
             link
         };
 
-        units.extend(file_utils.symlink(&path, link, m.as_ref())?);
+        units.extend(file_system.symlink(&path, link, m.as_ref())?);
         Ok(units)
     }
 }

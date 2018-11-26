@@ -16,8 +16,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-/// Utilities to build units for creating directories.
-pub struct GlobalFileUtils<'a> {
+/// Helper and tracker of any filesystem modifications.
+///
+/// The global implementation is the one which constructs and merges the ones produced by systems.
+pub struct GlobalFileSystem<'a> {
     opts: &'a Opts,
     state_dir: PathBuf,
     allocator: &'a UnitAllocator,
@@ -27,15 +29,15 @@ pub struct GlobalFileUtils<'a> {
     pub files: FxHashMap<PathBuf, Vec<&'a System>>,
 }
 
-impl<'a> GlobalFileUtils<'a> {
+impl<'a> GlobalFileSystem<'a> {
     /// Create new, thread-safe file utilities.
     pub fn new(
         opts: &'a Opts,
         state_dir: &Path,
         allocator: &'a UnitAllocator,
         data: &'a Data,
-    ) -> GlobalFileUtils<'a> {
-        GlobalFileUtils {
+    ) -> GlobalFileSystem<'a> {
+        GlobalFileSystem {
             opts,
             state_dir: state_dir.to_owned(),
             allocator,
@@ -47,8 +49,8 @@ impl<'a> GlobalFileUtils<'a> {
     }
 
     /// Create a new child utility.
-    pub fn new_child(&self) -> FileUtils<'a> {
-        FileUtils {
+    pub fn new_child(&self) -> FileSystem<'a> {
+        FileSystem {
             opts: self.opts,
             state_dir: self.state_dir.to_owned(),
             allocator: self.allocator,
@@ -61,7 +63,7 @@ impl<'a> GlobalFileUtils<'a> {
     /// Extend the state of this file utils with another.
     /// This sets `valid` to false if there are multiple systems modifying the same directory or
     /// file, and keeps track of which systems are trying to do that.
-    pub fn extend(&mut self, system: &'a System, other: FileUtils) -> bool {
+    pub fn extend(&mut self, system: &'a System, other: FileSystem) -> bool {
         for (key, _) in other.directories {
             let systems = self.directories.entry(key.clone()).or_default();
             self.valid = self.valid && systems.is_empty();
@@ -108,8 +110,8 @@ impl<'a> GlobalFileUtils<'a> {
     }
 }
 
-/// Utilities to build units for creating directories.
-pub struct FileUtils<'a> {
+/// Helper and tracker of any filesystem modifications.
+pub struct FileSystem<'a> {
     opts: &'a Opts,
     state_dir: PathBuf,
     allocator: &'a UnitAllocator,
@@ -118,7 +120,7 @@ pub struct FileUtils<'a> {
     files: FxHashMap<PathBuf, UnitId>,
 }
 
-impl<'a> FileUtils<'a> {
+impl<'a> FileSystem<'a> {
     /// Access or allocate a file dependency of the given path.
     pub fn file_dependency(&mut self, path: &Path) -> Dependency {
         if let Some(id) = self.files.get(path).cloned() {
@@ -329,17 +331,17 @@ impl<'a> FileUtils<'a> {
     /// Construct a relative path from a provided base directory path to the provided path
     ///
     /// ```rust
-    /// use quickcfg::FileUtils;
+    /// use quickcfg::FileSystem;
     /// use std::path::PathBuf;
     ///
     /// let baz: PathBuf = "/foo/bar/baz".into();
     /// let bar: PathBuf = "/foo/bar".into();
     /// let quux: PathBuf = "/foo/bar/quux".into();
-    /// assert_eq!(FileUtils::path_relative_from(&bar, &baz), Some("../".into()));
-    /// assert_eq!(FileUtils::path_relative_from(&baz, &bar), Some("baz".into()));
-    /// assert_eq!(FileUtils::path_relative_from(&quux, &baz), Some("../quux".into()));
-    /// assert_eq!(FileUtils::path_relative_from(&baz, &quux), Some("../baz".into()));
-    /// assert_eq!(FileUtils::path_relative_from(&bar, &quux), Some("../".into()));
+    /// assert_eq!(FileSystem::path_relative_from(&bar, &baz), Some("../".into()));
+    /// assert_eq!(FileSystem::path_relative_from(&baz, &bar), Some("baz".into()));
+    /// assert_eq!(FileSystem::path_relative_from(&quux, &baz), Some("../quux".into()));
+    /// assert_eq!(FileSystem::path_relative_from(&baz, &quux), Some("../baz".into()));
+    /// assert_eq!(FileSystem::path_relative_from(&bar, &quux), Some("../".into()));
     ///
     /// ```
     pub fn path_relative_from(path: &Path, base: &Path) -> Option<PathBuf> {

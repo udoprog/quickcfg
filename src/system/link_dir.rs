@@ -1,5 +1,5 @@
 use crate::{
-    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileUtils,
+    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::Error;
 use serde_derive::Deserialize;
@@ -25,7 +25,7 @@ impl LinkDir {
             base_dirs,
             facts,
             environment,
-            file_utils,
+            file_system,
             ..
         } = input;
 
@@ -48,13 +48,13 @@ impl LinkDir {
             let to_path = to.join(from_path.strip_prefix(&from)?);
 
             let from = from_path.symlink_metadata()?;
-            let to = FileUtils::try_open_meta(&to_path)?;
+            let to = FileSystem::try_open_meta(&to_path)?;
 
             let source_type = from.file_type();
 
             if source_type.is_dir() {
-                if FileUtils::should_create_dir(&to_path, to.as_ref())? {
-                    units.extend(file_utils.create_dir_all(&to_path)?);
+                if FileSystem::should_create_dir(&to_path, to.as_ref())? {
+                    units.extend(file_system.create_dir_all(&to_path)?);
                 }
 
                 continue;
@@ -62,11 +62,11 @@ impl LinkDir {
 
             let link = to_path
                 .parent()
-                .and_then(|p| FileUtils::path_relative_from(&from_path, p))
+                .and_then(|p| FileSystem::path_relative_from(&from_path, p))
                 .unwrap_or_else(|| from_path.to_owned());
 
             // Maybe create a symlink!
-            units.extend(file_utils.symlink(&to_path, link, to.as_ref())?);
+            units.extend(file_system.symlink(&to_path, link, to.as_ref())?);
         }
 
         return Ok(units);

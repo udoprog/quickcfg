@@ -33,7 +33,7 @@ impl DownloadAndRun {
     {
         let SystemInput {
             allocator,
-            file_utils,
+            file_system,
             state,
             facts,
             environment,
@@ -51,7 +51,7 @@ impl DownloadAndRun {
 
         let url = reqwest::Url::parse(&self.url)?;
 
-        let path = file_utils.state_path(&id);
+        let path = file_system.state_path(&id);
 
         let mut units = Vec::new();
 

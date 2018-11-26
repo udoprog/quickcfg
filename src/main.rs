@@ -9,7 +9,7 @@ use quickcfg::{
     packages, stage,
     system::{self, SystemInput},
     unit::{self, Unit, UnitAllocator, UnitInput},
-    Config, DiskState, GlobalFileUtils, Load, Save, State,
+    Config, DiskState, GlobalFileSystem, Load, Save, State,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -123,7 +123,7 @@ fn try_apply_config<'a>(
     let allocator = UnitAllocator::default();
 
     let base_dirs = BaseDirs::new();
-    let mut global_file_utils = GlobalFileUtils::new(opts, state_dir, &allocator, &data);
+    let mut global_file_system = GlobalFileSystem::new(opts, state_dir, &allocator, &data);
 
     // post-hook for all systems, mapped by id.
     let mut post_systems = HashMap::new();
@@ -133,7 +133,7 @@ fn try_apply_config<'a>(
 
     pool.install(|| {
         let res = config.systems.par_iter().map(|system| {
-            let mut file_utils = global_file_utils.new_child();
+            let mut file_system = global_file_system.new_child();
 
             let res = system.apply(SystemInput {
                 root: &root,
@@ -143,21 +143,21 @@ fn try_apply_config<'a>(
                 packages: &packages,
                 environment,
                 allocator: &allocator,
-                file_utils: &mut file_utils,
+                file_system: &mut file_system,
                 state: &state,
                 now: now,
                 opts: opts,
             });
 
             match res {
-                Ok(units) => Ok((system, file_utils, units)),
+                Ok(units) => Ok((system, file_system, units)),
                 Err(e) => Err((system, e)),
             }
         });
 
         // Collect all units and map out a unit id to each system that can be used as a dependency.
         for res in res.collect::<Vec<_>>() {
-            let (system, system_file_utils, mut units) = match res {
+            let (system, file_system, mut units) = match res {
                 Ok(result) => result,
                 Err((system, e)) => {
                     errors.push((system, e));
@@ -165,7 +165,7 @@ fn try_apply_config<'a>(
                 }
             };
 
-            if !global_file_utils.extend(system, system_file_utils) {
+            if !global_file_system.extend(system, file_system) {
                 continue;
             }
 
@@ -203,7 +203,7 @@ fn try_apply_config<'a>(
         }
     });
 
-    global_file_utils.validate()?;
+    global_file_system.validate()?;
 
     if !errors.is_empty() {
         for (system, e) in errors.into_iter() {

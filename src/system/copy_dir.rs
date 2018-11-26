@@ -1,5 +1,5 @@
 use crate::{
-    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileUtils,
+    environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::{bail, Error};
 use serde_derive::Deserialize;
@@ -30,7 +30,7 @@ impl CopyDir {
             base_dirs,
             facts,
             environment,
-            file_utils,
+            file_system,
             ..
         } = input;
 
@@ -53,26 +53,26 @@ impl CopyDir {
             let to_path = to.join(from_path.strip_prefix(&from)?);
 
             let from = from_path.symlink_metadata()?;
-            let to = FileUtils::try_open_meta(&to_path)?;
+            let to = FileSystem::try_open_meta(&to_path)?;
 
             let source_type = from.file_type();
 
             if source_type.is_symlink() {
                 let link = fs::read_link(from_path)?;
-                units.extend(file_utils.symlink(&to_path, link, to.as_ref())?);
+                units.extend(file_system.symlink(&to_path, link, to.as_ref())?);
                 continue;
             }
 
             if source_type.is_dir() {
-                if FileUtils::should_create_dir(&to_path, to.as_ref())? {
-                    units.extend(file_utils.create_dir_all(&to_path)?);
+                if FileSystem::should_create_dir(&to_path, to.as_ref())? {
+                    units.extend(file_system.create_dir_all(&to_path)?);
                 }
 
                 continue;
             }
 
             if source_type.is_file() {
-                units.extend(file_utils.copy_file(
+                units.extend(file_system.copy_file(
                     &from_path,
                     from,
                     &to_path,

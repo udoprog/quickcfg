@@ -1,8 +1,7 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    file_utils::FileUtils, git::Git, hierarchy::Data, packages, packages::PackageManager,
-    state::State,
+    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State, FileSystem,
 };
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
@@ -15,10 +14,10 @@ use std::time::SystemTime;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dependency {
     /// Someone providing a file.
-    /// The file is aliased by FileUtils.
+    /// The file is aliased by FileSystem.
     File(UnitId),
     /// Someone providing a directory.
-    /// The file is aliased by FileUtils.
+    /// The file is aliased by FileSystem.
     Dir(UnitId),
     /// Direct dependency on other unit.
     Unit(UnitId),
@@ -225,7 +224,7 @@ impl CopyFile {
         log::info!("{} -> {}", from.display(), to.display());
         io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
         // make sure timestamp is in sync.
-        FileUtils::touch(&to, from_modified)
+        FileSystem::touch(&to, from_modified)
     }
 }
 
@@ -314,7 +313,7 @@ impl CopyTemplate {
             // Nothing about the template would change, only update the modified time of the file.
             log::info!("touching {}", to.display());
             // only need to update timestamp.
-            return FileUtils::touch(&to, from_modified);
+            return FileSystem::touch(&to, from_modified);
         }
 
         let reg = Handlebars::new();
@@ -334,7 +333,7 @@ impl CopyTemplate {
         log::info!("{} -> {} (template)", from.display(), to.display());
         File::create(&to)?.write_all(&out)?;
         state.touch_hash(&id, &hash)?;
-        return FileUtils::touch(&to, from_modified);
+        return FileSystem::touch(&to, from_modified);
 
         pub struct WriteOutput<W: Write> {
             write: W,

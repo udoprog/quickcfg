@@ -3,7 +3,7 @@ mod config;
 pub mod environment;
 pub mod facts;
 mod file_operations;
-mod file_utils;
+mod file_system;
 pub mod git;
 pub mod hierarchy;
 pub mod opts;
@@ -16,6 +16,6 @@ pub mod unit;
 
 pub use crate::config::Config;
 pub use crate::file_operations::{Load, Save};
-pub use crate::file_utils::{FileUtils, GlobalFileUtils};
+pub use crate::file_system::{FileSystem, GlobalFileSystem};
 pub use crate::state::{DiskState, State};
 pub use crate::template::Template;
