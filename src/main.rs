@@ -223,7 +223,7 @@ fn try_apply_config<'c>(
     }
 
     // Schedule all units into stages that can be run independently in parallel.
-    let mut scheduler = stage::Scheduler::new(all_units);
+    let mut scheduler = stage::Stager::new(all_units);
 
     let mut errors = Vec::new();
     let mut i = 0;
@@ -312,7 +312,7 @@ fn try_apply_config<'c>(
         bail!("Failed to run all units");
     }
 
-    let unscheduled = scheduler.into_unscheduled();
+    let unscheduled = scheduler.into_unstaged();
 
     if !unscheduled.is_empty() {
         if log::log_enabled!(log::Level::Trace) {

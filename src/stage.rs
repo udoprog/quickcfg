@@ -10,18 +10,18 @@ pub struct Stage {
     pub units: Vec<SystemUnit>,
 }
 
-/// Scheduler that incrementally schedules stages to be run.
-pub struct Scheduler {
+/// Stager that incrementally schedules stages to be run.
+pub struct Stager {
     units: Vec<SystemUnit>,
     provided: HashSet<Dependency>,
     thread_locals: Vec<SystemUnit>,
     stage: Vec<SystemUnit>,
 }
 
-impl Scheduler {
-    /// Construct a new scheduler out of an iterator of units.
+impl Stager {
+    /// Construct a new stager out of an iterator of units.
     pub fn new(units: impl IntoIterator<Item = SystemUnit>) -> Self {
-        Scheduler {
+        Stager {
             units: units.into_iter().collect::<Vec<_>>(),
             provided: HashSet::new(),
             thread_locals: Vec::new(),
@@ -31,7 +31,7 @@ impl Scheduler {
 
     /// Plans and returns the next stage to run.
     pub fn stage(&mut self) -> Option<Stage> {
-        let Scheduler {
+        let Stager {
             ref mut units,
             ref provided,
             ref mut thread_locals,
@@ -87,7 +87,7 @@ impl Scheduler {
     }
 
     /// Convert into unscheduled units.
-    pub fn into_unscheduled(self) -> Vec<SystemUnit> {
+    pub fn into_unstaged(self) -> Vec<SystemUnit> {
         self.units
     }
 }
