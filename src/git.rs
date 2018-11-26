@@ -14,9 +14,9 @@ pub struct Git {
 
 impl Git {
     /// Construct a new git integration.
-    pub fn new<'a>(path: impl Into<&'a Path>) -> Git {
+    pub fn new(path: impl AsRef<Path>) -> Git {
         Git {
-            path: path.into().to_owned(),
+            path: path.as_ref().to_owned(),
             command: command::Command::new("git"),
         }
     }

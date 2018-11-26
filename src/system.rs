@@ -61,9 +61,9 @@ impl System {
 
 /// All inputs for a system.
 #[derive(Clone)]
-pub struct SystemInput<'a, 'state: 'a, E>
+pub struct SystemInput<'a, E>
 where
-    E: Copy + e::Environment,
+    E: e::Environment,
 {
     /// The root directory of the project being built.
     pub root: &'a Path,
@@ -82,7 +82,7 @@ where
     /// File utilities.
     pub file_utils: &'a FileUtils<'a>,
     /// State accessor.
-    pub state: &'a State<'state>,
+    pub state: &'a State<'a>,
     /// Current time.
     pub now: &'a SystemTime,
     /// Current optsion.

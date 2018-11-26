@@ -3,7 +3,7 @@ use failure::{bail, Error};
 use std::collections::HashMap;
 use std::env;
 
-pub trait Environment {
+pub trait Environment: Copy {
     /// Access the given environment variables.
     fn var(&self, key: &str) -> Result<Option<String>, Error>;
 }
@@ -25,10 +25,8 @@ impl Environment for Real {
 }
 
 /// A custom environment.
-pub struct Custom<'a>(pub &'a HashMap<String, String>);
-
-impl Environment for Custom<'_> {
+impl Environment for &HashMap<String, String> {
     fn var(&self, key: &str) -> Result<Option<String>, Error> {
-        Ok(self.0.get(key).map(|s| s.to_string()))
+        Ok(self.get(key).map(|s| s.to_string()))
     }
 }

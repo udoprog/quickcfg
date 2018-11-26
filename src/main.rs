@@ -89,14 +89,14 @@ fn try_main() -> Result<(), Error> {
 }
 
 /// Internal method to try to apply the given configuration.
-fn try_apply_config<'c>(
+fn try_apply_config<'a>(
     opts: &Opts,
-    config: &'c Config,
-    now: &'c SystemTime,
+    config: &Config,
+    now: &SystemTime,
     root: &Path,
     state_dir: &Path,
-    mut state: State<'c>,
-) -> Result<State<'c>, Error> {
+    mut state: State<'a>,
+) -> Result<State<'a>, Error> {
     use rayon::prelude::*;
     use std::sync::mpsc::channel;
 
@@ -155,9 +155,7 @@ fn try_apply_config<'c>(
             scope.spawn(move |_| {
                 let res = system.apply(input.clone());
 
-                let res = res
-                    .map_err(|e| (system, e))
-                    .map(|units| (system, units));
+                let res = res.map_err(|e| (system, e)).map(|units| (system, units));
 
                 tx.send(res).expect("failed to send");
             });
@@ -190,7 +188,8 @@ fn try_apply_config<'c>(
             if let Some(system_id) = system.id() {
                 if units.is_empty() {
                     // If system is empty, there is nothing to depend on.
-                    post_systems.insert(system_id, system::Dependency::Transitive(system.requires()));
+                    post_systems
+                        .insert(system_id, system::Dependency::Transitive(system.requires()));
                     continue;
                 }
 
@@ -288,8 +287,7 @@ fn try_apply_config<'c>(
                         Ok(()) => Ok((unit, s)),
                         Err(e) => Err((unit, e)),
                     }
-                })
-                .collect::<Vec<Result<_, _>>>();
+                }).collect::<Vec<Result<_, _>>>();
 
             for res in results {
                 match res {

@@ -222,7 +222,7 @@ impl<'de> de::Deserialize<'de> for Template {
 mod tests {
     use self::Part::*;
     use super::{Part, Template};
-    use crate::{environment, facts::Facts};
+    use crate::facts::Facts;
     use std::collections::HashMap;
 
     #[test]
@@ -247,7 +247,7 @@ mod tests {
         environment.insert("HOME".to_string(), "home".to_string());
 
         assert_eq!(
-            t.render(&facts, environment::Custom(&environment), |_| Ok(()))
+            t.render(&facts, &environment, |_| Ok(()))
                 .unwrap()
                 .map(|n| n.to_string()),
             Some("root/baz/home/bar.yaml".to_string())

@@ -71,7 +71,7 @@ impl Data {
 
     /// Load data based on a file spec.
     /// This is typically in the first couple of lines in a file.
-    pub fn load_from_spec<'a>(&self, content: &'a str) -> Result<Mapping, Error> {
+    pub fn load_from_spec(&self, content: &str) -> Result<Mapping, Error> {
         let mut m = Mapping::default();
 
         // look at the first 5 lines.

@@ -99,7 +99,7 @@ impl Facts {
     }
 }
 
-impl<'a> Vars for &'a Facts {
+impl Vars for &Facts {
     fn get(&self, k: &str) -> Option<&str> {
         Facts::get(self, k)
     }
