@@ -4,110 +4,22 @@
 use crate::{
     hierarchy::Data,
     opts::Opts,
-    system::System,
-    unit::{
-        CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator, UnitId,
-    },
+    unit::{CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator},
 };
 use failure::{bail, format_err, Error, ResultExt};
 use fxhash::FxHashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
-/// Helper and tracker of any filesystem modifications.
-///
-/// The global implementation is the one which constructs and merges the ones produced by systems.
-pub struct GlobalFileSystem<'a> {
-    opts: &'a Opts,
-    state_dir: PathBuf,
-    allocator: &'a UnitAllocator,
-    data: &'a Data,
-    pub valid: bool,
-    pub directories: FxHashMap<PathBuf, Vec<&'a System>>,
-    pub files: FxHashMap<PathBuf, Vec<&'a System>>,
-}
-
-impl<'a> GlobalFileSystem<'a> {
-    /// Create new, thread-safe file utilities.
-    pub fn new(
-        opts: &'a Opts,
-        state_dir: &Path,
-        allocator: &'a UnitAllocator,
-        data: &'a Data,
-    ) -> GlobalFileSystem<'a> {
-        GlobalFileSystem {
-            opts,
-            state_dir: state_dir.to_owned(),
-            allocator,
-            data,
-            valid: true,
-            directories: FxHashMap::default(),
-            files: FxHashMap::default(),
-        }
-    }
-
-    /// Create a new child utility.
-    pub fn new_child(&self) -> FileSystem<'a> {
-        FileSystem {
-            opts: self.opts,
-            state_dir: self.state_dir.to_owned(),
-            allocator: self.allocator,
-            data: self.data,
-            directories: FxHashMap::default(),
-            files: FxHashMap::default(),
-        }
-    }
-
-    /// Extend the state of this file utils with another.
-    /// This sets `valid` to false if there are multiple systems modifying the same directory or
-    /// file, and keeps track of which systems are trying to do that.
-    pub fn extend(&mut self, system: &'a System, other: FileSystem) -> bool {
-        for (key, _) in other.directories {
-            let systems = self.directories.entry(key.clone()).or_default();
-            self.valid = self.valid && systems.is_empty();
-            systems.push(system);
-        }
-
-        for (key, _) in other.files {
-            let systems = self.files.entry(key.clone()).or_default();
-            self.valid = self.valid && systems.is_empty();
-            systems.push(system);
-        }
-
-        self.valid
-    }
-
-    /// Validate that we haven't created any conflicting files.
-    /// Logs details and errors in case duplicates are registered.
-    pub fn validate(self) -> Result<(), Error> {
-        if self.valid {
-            return Ok(());
-        }
-
-        for (path, systems) in self.directories {
-            if systems.len() > 1 {
-                log::error!("Conflicting modification to directory: {}", path.display());
-
-                for (i, system) in systems.into_iter().enumerate() {
-                    log::error!("System {:02}: {}", i, system);
-                }
-            }
-        }
-
-        for (path, systems) in self.files {
-            if systems.len() > 1 {
-                log::error!("Conflicting modification to file: {}", path.display());
-
-                for (i, system) in systems.into_iter().enumerate() {
-                    log::error!("System {:02}: {}", i, system);
-                }
-            }
-        }
-
-        bail!("Multiple systems registered conflicting file modifications");
-    }
+/// Synchronized bits of FileSystem.
+#[derive(Default)]
+pub struct FileSystemInner {
+    // TODO: include the system that modified the paths for better diagnostics.
+    paths: FxHashMap<PathBuf, Dependency>,
+    invalid: bool,
 }
 
 /// Helper and tracker of any filesystem modifications.
@@ -116,36 +28,77 @@ pub struct FileSystem<'a> {
     state_dir: PathBuf,
     allocator: &'a UnitAllocator,
     data: &'a Data,
-    directories: FxHashMap<PathBuf, UnitId>,
-    files: FxHashMap<PathBuf, UnitId>,
+    inner: Mutex<FileSystemInner>,
+}
+
+macro_rules! dependency {
+    ($name:ident, $slf:ident, $path:ident) => {{
+        let mut inner = $slf
+            .inner
+            .lock()
+            .map_err(|_| format_err!("Lock poisoned"))?;
+
+        if let Some(dependency) = inner.paths.get_mut($path) {
+            if let Dependency::$name(_) = *dependency {
+                return Ok(*dependency);
+            }
+
+            bail!(
+                "Multiple systems modifying path `{}` in different ways",
+                $path.display()
+            );
+        }
+
+        let dependency = Dependency::$name($slf.allocator.allocate());
+        Ok(*inner.paths.entry($path.to_owned()).or_insert(dependency))
+    }};
 }
 
 impl<'a> FileSystem<'a> {
-    /// Access or allocate a file dependency of the given path.
-    pub fn file_dependency(&mut self, path: &Path) -> Dependency {
-        if let Some(id) = self.files.get(path).cloned() {
-            return Dependency::File(id);
+    /// Create new, thread-safe file utilities.
+    pub fn new(
+        opts: &'a Opts,
+        state_dir: &Path,
+        allocator: &'a UnitAllocator,
+        data: &'a Data,
+    ) -> FileSystem<'a> {
+        FileSystem {
+            opts,
+            state_dir: state_dir.to_owned(),
+            allocator,
+            data,
+            inner: Mutex::new(FileSystemInner::default()),
+        }
+    }
+
+    /// Validate that we haven't created any conflicting files.
+    /// Logs details and errors in case duplicates are registered.
+    pub fn validate(self) -> Result<(), Error> {
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|_| format_err!("Lock poisoned"))?;
+
+        if !inner.invalid {
+            return Ok(());
         }
 
-        let id = self.allocator.allocate();
-        self.files.insert(path.to_owned(), id);
-        Dependency::File(id)
+        bail!("Multiple systems with conflicting path modifications");
+    }
+
+    /// Access or allocate a file dependency of the given path.
+    pub fn file_dependency(&self, path: &Path) -> Result<Dependency, Error> {
+        dependency!(File, self, path)
     }
 
     /// Access or allocate a directory dependency of the given path.
-    pub fn dir_dependency(&mut self, path: &Path) -> Dependency {
-        if let Some(id) = self.directories.get(path).cloned() {
-            return Dependency::Dir(id);
-        }
-
-        let id = self.allocator.allocate();
-        self.directories.insert(path.to_owned(), id);
-        Dependency::Dir(id)
+    pub fn dir_dependency(&self, path: &Path) -> Result<Dependency, Error> {
+        dependency!(Dir, self, path)
     }
 
     /// Try to create a symlink.
     pub fn symlink(
-        &mut self,
+        &self,
         path: &Path,
         link: PathBuf,
         meta: Option<&fs::Metadata>,
@@ -186,11 +139,11 @@ impl<'a> FileSystem<'a> {
 
         if let Some(parent) = path.parent() {
             if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent));
+                unit.dependencies.push(self.dir_dependency(parent)?);
             }
         }
 
-        unit.provides.push(self.file_dependency(path));
+        unit.provides.push(self.file_dependency(path)?);
         Ok(Some(unit))
     }
 
@@ -201,7 +154,7 @@ impl<'a> FileSystem<'a> {
     /// * The destination file does not exist.
     /// * The destination file has a modified timestamp less than the source file.
     pub fn copy_file(
-        &mut self,
+        &self,
         from: &Path,
         from_meta: fs::Metadata,
         to: &Path,
@@ -229,19 +182,24 @@ impl<'a> FileSystem<'a> {
 
         if let Some(parent) = to.parent() {
             if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent));
+                unit.dependencies.push(self.dir_dependency(parent)?);
             }
         }
 
-        unit.provides.push(self.file_dependency(to));
+        unit.provides.push(self.file_dependency(to)?);
         Ok(Some(unit))
     }
 
     /// Recursively set up units with dependencies to create the given directories.
-    pub fn create_dir_all(&mut self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
+    pub fn create_dir_all(&self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| format_err!("Lock poisoned"))?;
+
         let dirs = {
             // Directory is already being created.
-            if self.directories.contains_key(dir) {
+            if inner.paths.contains_key(dir) {
                 return Ok(vec![]);
             }
 
@@ -260,7 +218,7 @@ impl<'a> FileSystem<'a> {
                     break;
                 }
 
-                if self.directories.contains_key(parent) {
+                if inner.paths.contains_key(parent) {
                     break;
                 }
 
@@ -274,18 +232,30 @@ impl<'a> FileSystem<'a> {
         let mut out = Vec::new();
 
         for dir in dirs.into_iter().rev() {
-            // needs to re-check now that we have mutable access.
-            if self.directories.contains_key(dir) {
-                continue;
+            let mut unit = self.allocator.unit(CreateDir(dir.to_owned()));
+            let current_dependency = Dependency::Dir(unit.id);
+            let dependency = *inner
+                .paths
+                .entry(dir.to_owned())
+                .or_insert(current_dependency);
+
+            // Someone else is creating this dependency.
+            if dependency != current_dependency {
+                // Other system is creating the directory, do nothing!
+                if let Dependency::Dir(_) = dependency {
+                    continue;
+                }
+
+                bail!(
+                    "Other system is modifying path, but not as a directory: {}",
+                    dir.display()
+                );
             }
 
-            let mut unit = self.allocator.unit(CreateDir(dir.to_owned()));
-            self.directories.insert(dir.to_owned(), unit.id);
-            unit.provides.push(Dependency::Dir(unit.id));
+            unit.provides.push(dependency);
 
             if let Some(parent) = dir.parent() {
-                unit.dependencies
-                    .extend(self.directories.get(parent).cloned().map(Dependency::Dir));
+                unit.dependencies.extend(inner.paths.get(parent).cloned());
             }
 
             out.push(unit);

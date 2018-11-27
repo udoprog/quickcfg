@@ -95,7 +95,7 @@ impl GitSync {
         let parent_dir = match git.path.parent() {
             Some(parent) if !parent.is_dir() => {
                 units.extend(file_system.create_dir_all(parent)?);
-                Some(file_system.dir_dependency(parent))
+                Some(file_system.dir_dependency(parent)?)
             }
             _ => None,
         };
@@ -107,7 +107,7 @@ impl GitSync {
         });
 
         git_clone.dependencies.extend(parent_dir);
-        git_clone.provides.push(file_system.dir_dependency(&path));
+        git_clone.provides.push(file_system.dir_dependency(&path)?);
 
         units.push(git_clone);
         return Ok(units);

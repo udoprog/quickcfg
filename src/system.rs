@@ -137,7 +137,7 @@ where
     /// Unit allocator to use.
     pub allocator: &'a UnitAllocator,
     /// File utilities.
-    pub file_system: &'a mut FileSystem<'f>,
+    pub file_system: &'a FileSystem<'f>,
     /// State accessor.
     pub state: &'a State<'a>,
     /// Current time.
