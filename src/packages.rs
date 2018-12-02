@@ -2,6 +2,7 @@
 //!
 //! Can check which packages are installed.
 
+mod cargo;
 mod debian;
 mod python;
 mod ruby;
@@ -41,6 +42,7 @@ impl Provider {
             "pip" => test(python::PackageManager::new("pip")),
             "pip3" => test(python::PackageManager::new("pip3")),
             "gem" => test(ruby::PackageManager::new()),
+            "cargo" => test(cargo::PackageManager::new()),
             _ => bail!("No package manager provider for `{}`", name),
         }
     }

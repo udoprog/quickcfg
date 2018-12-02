@@ -17,19 +17,23 @@ fn app() -> App<'static, 'static> {
                 .long("root")
                 .help("Run using the given path as a configuration root.")
                 .takes_value(true),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("force")
                 .long("force")
                 .help("When updating configuration, force the update."),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("debug")
                 .long("debug")
                 .help("Enable debug logging."),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("non-interactive")
                 .long("non-interactive")
                 .help("Force to run in non-interactive mode."),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("updates-only")
                 .long("updates-only")
                 .help("Only run if there are updates."),

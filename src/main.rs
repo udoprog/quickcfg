@@ -280,7 +280,8 @@ fn try_apply_config<'a>(
                         Ok(()) => Ok((unit, s)),
                         Err(e) => Err((unit, e)),
                     }
-                }).collect::<Vec<Result<_, _>>>();
+                })
+                .collect::<Vec<Result<_, _>>>();
 
             for res in results {
                 match res {
