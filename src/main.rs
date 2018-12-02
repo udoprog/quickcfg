@@ -347,7 +347,7 @@ fn try_update_config(
         }
     }
 
-    let git = git::Git::new(root);
+    let git = git::open(root);
 
     if !git.test()? {
         log::warn!("no working git command found");

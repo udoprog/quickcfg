@@ -612,7 +612,7 @@ pub struct GitClone {
     /// The ID of the thing being cloned.
     pub id: String,
     /// Git repository.
-    pub git: Git,
+    pub git: Box<dyn Git>,
     /// Remote to clone.
     pub remote: String,
 }
@@ -623,7 +623,7 @@ impl fmt::Display for GitClone {
             fmt,
             "git clone `{}` to `{}`",
             self.remote,
-            self.git.path.display()
+            self.git.path().display()
         )
     }
 }
@@ -639,8 +639,8 @@ impl GitClone {
             ref id,
         } = *self;
 
-        log::info!("Cloning `{}` into `{}`", remote, git.path.display());
-        git.clone(remote)?;
+        log::info!("Cloning `{}` into `{}`", remote, git.path().display());
+        git.clone_remote(remote)?;
         state.touch(&id);
         Ok(())
     }
@@ -658,14 +658,14 @@ pub struct GitUpdate {
     /// The ID of the thing being cloned.
     pub id: String,
     /// Git repository.
-    pub git: Git,
+    pub git: Box<dyn Git>,
     /// If the update should be forced.
     pub force: bool,
 }
 
 impl fmt::Display for GitUpdate {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "git update: {}", self.git.path.display())
+        write!(fmt, "git update: {}", self.git.path().display())
     }
 }
 
@@ -682,10 +682,10 @@ impl GitUpdate {
 
         if git.needs_update()? {
             if force {
-                log::info!("Force updating `{}`", git.path.display());
+                log::info!("Force updating `{}`", git.path().display());
                 git.force_update()?;
             } else {
-                log::info!("Updating `{}`", git.path.display());
+                log::info!("Updating `{}`", git.path().display());
                 git.update()?;
             }
         }
