@@ -397,20 +397,17 @@ impl<'a> FileSystem<'a> {
 
         let to_modified = to_meta.modified()?;
 
-        if template {
-            if let Some(modified) = self.data.last_modified.as_ref() {
-                if *modified != to_modified {
-                    return Ok(Some(modified.clone()));
-                }
-            } else {
-                if from_modified != to_modified {
-                    return Ok(Some(from_modified));
-                }
-            }
-        } else {
-            if from_modified != to_modified {
-                return Ok(Some(from_modified));
-            }
+        let modified = match template {
+            // use the modification time of the hierarchy if modified more recently.
+            true => match self.data.last_modified.as_ref() {
+                Some(data_modified) if from_modified < *data_modified => data_modified,
+                _ => &from_modified,
+            },
+            false => &from_modified,
+        };
+
+        if *modified != to_modified {
+            return Ok(Some(modified.clone()));
         }
 
         Ok(None)
