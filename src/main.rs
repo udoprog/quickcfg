@@ -55,6 +55,18 @@ fn try_main() -> Result<(), Error> {
     let opts = opts::opts()?;
     let root = opts.root(base_dirs.as_ref())?;
 
+    let config_path = root.join("quickcfg.yml");
+    let state_path = root.join(".state.yml");
+    let state_dir = root.join(".state");
+
+    if opts.paths {
+        println!("Root: {}", root.display());
+        println!("Configuration File: {}", config_path.display());
+        println!("State File: {}", state_path.display());
+        println!("State Dir: {}", state_dir.display());
+        return Ok(());
+    }
+
     if opts.debug {
         log::set_max_level(log::LevelFilter::Trace);
     } else {
@@ -68,16 +80,12 @@ fn try_main() -> Result<(), Error> {
         log::trace!("Using config from {}", root.display());
     }
 
-    let state_path = root.join(".state.yml");
-    let state_dir = root.join(".state");
-
     if !state_dir.is_dir() {
         fs::create_dir(&state_dir).with_context(|_| {
             format_err!("Failed to create state directory: {}", state_dir.display())
         })?;
     }
 
-    let config_path = root.join("quickcfg.yml");
     let config = Config::load(&config_path)
         .with_context(|_| format_err!("Failed to load configuration: {}", config_path.display()))?
         .unwrap_or_default();

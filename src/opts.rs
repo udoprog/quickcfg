@@ -25,6 +25,11 @@ fn app() -> App<'static, 'static> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("paths")
+                .long("paths")
+                .help("Print paths used by quickcfg."),
+        )
+        .arg(
             Arg::with_name("force")
                 .long("force")
                 .help("When updating configuration, force the update."),
@@ -54,6 +59,7 @@ pub fn opts() -> Result<Opts, Error> {
 
     opts.root = matches.value_of("root").map(PathBuf::from);
     opts.init = matches.value_of("init").map(String::from);
+    opts.paths = matches.is_present("paths");
     opts.force = matches.is_present("force");
     opts.non_interactive = matches.is_present("non-interactive");
     opts.updates_only = matches.is_present("updates-only");
@@ -69,6 +75,8 @@ pub struct Opts {
     pub root: Option<PathBuf>,
     /// Initialize the project from the given repo.
     pub init: Option<String>,
+    /// Print paths used by quickcfg.
+    pub paths: bool,
     /// Force update.
     pub force: bool,
     /// Run in non-interactive mode.

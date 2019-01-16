@@ -19,7 +19,7 @@ I've tried my best to make all operations non-destructive, but beware of bugs!
 To get started, you can have quickcfg clone the configuration for you in the default location:
 
 ```bash
-quickcfg --init <git-url>
+qc --init <git-url>
 ```
 
 This will put the checked out configuration in the default config location for you platform.
@@ -27,6 +27,12 @@ For example:
 
 * Windows - `%APPDATA%\quickcfg`
 * Linux - `$HOME/.config/quickcfg`
+
+To find out where the various quickcfg directories are, use:
+
+```bash
+qc --paths
+```
 
 ## Features
 
@@ -47,9 +53,9 @@ If you want quickcfg to periodically check your git repositories for updates, yo
 following to your `.zshrc` or `.bashrc`:
 
 ```bash
-if command -v quickcfg > /dev/null 2>&1; then
-    quickcfg --updates-only
-    alias upd="quickcfg"
+if command -v qc > /dev/null 2>&1; then
+    qc --updates-only
+    alias upd="qc"
 fi
 ```
 

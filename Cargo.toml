@@ -14,6 +14,10 @@ description = """
 Do basic configuration of a system, declaratively and quickly.
 """
 
+[[bin]]
+name = "qc"
+path = "src/main.rs"
+
 [badges]
 travis-ci = { repository = "udoprog/quickcfg" }
 
