@@ -29,3 +29,16 @@ macro_rules! system_struct {
         }
     }
 }
+
+macro_rules! system_defaults {
+    (@method translate) => {
+        /// Default translation implementation for the given system.
+        pub fn translate(&self) -> crate::system::Translation<'_> {
+            crate::system::Translation::Keep
+        }
+    };
+
+    ($($name:ident),*) => {
+        $(system_defaults!(@method $name);)*
+    };
+}

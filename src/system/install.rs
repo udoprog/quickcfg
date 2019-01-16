@@ -8,9 +8,9 @@ use serde_derive::Deserialize;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
-/// Builds one unit for every directory and file that needs to be copied.
+/// Builds one unit for every batch of packages to install.
 system_struct! {
-    InstallPackages {
+    Install {
         #[doc="Hierarchy key to lookup for packages to install."]
         #[serde(default = "default_key")]
         pub key: String,
@@ -24,7 +24,9 @@ fn default_key() -> String {
     String::from("packages")
 }
 
-impl InstallPackages {
+impl Install {
+    system_defaults!(translate);
+
     /// Copy one directory to another.
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
@@ -42,6 +44,11 @@ impl InstallPackages {
 
         let provider = self.provider.as_ref();
 
+        let package_manager = match provider {
+            Some(provider) => packages.get(provider)?,
+            None => packages.default(),
+        };
+
         let id = self
             .id
             .as_ref()
@@ -52,9 +59,12 @@ impl InstallPackages {
 
         let mut all_packages = BTreeSet::new();
 
-        let key = match provider {
-            Some(provider) => format!("{}::{}", provider, self.key),
-            None => self.key.to_string(),
+        let key = match package_manager.as_ref().and_then(|p| p.key()) {
+            Some(key) => key.to_string(),
+            None => match provider {
+                Some(provider) => format!("{}::{}", provider, self.key),
+                None => self.key.to_string(),
+            },
         };
 
         all_packages.extend(data.load_or_default::<Vec<String>>(&key)?);
@@ -64,11 +74,6 @@ impl InstallPackages {
             log::trace!("Skipping `{}` since hash is fresh", id);
             return Ok(units);
         }
-
-        let package_manager = match provider {
-            Some(provider) => packages.get(provider)?,
-            None => packages.default(),
-        };
 
         let package_manager = match package_manager {
             Some(package_manager) => package_manager,
@@ -101,7 +106,7 @@ impl InstallPackages {
         // thread-local if package manager requires user interaction.
         let thread_local = package_manager.needs_interaction();
 
-        let mut unit = allocator.unit(unit::InstallPackages {
+        let mut unit = allocator.unit(unit::Install {
             package_manager,
             all_packages,
             to_install,
@@ -115,7 +120,7 @@ impl InstallPackages {
     }
 }
 
-impl fmt::Display for InstallPackages {
+impl fmt::Display for Install {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.provider.as_ref() {
             Some(provider) => write!(fmt, "install packages using provider `{}`", provider),

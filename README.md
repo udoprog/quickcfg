@@ -6,8 +6,6 @@ Apply a base configuration to a system, quickly!
 It reads a configuration and template structure from a [dotfiles] directory and tries to normalize
 the machine that it is run base on this configuration.
 
-Until Rust Edition 2018 is released, this crate is _Nightly Only_.
-
 **WARNING**:
 This project is currently in development.
 I've tried my best to make all operations non-destructive, but beware of bugs!
@@ -63,7 +61,7 @@ hierarchy:
 
 systems:
   # System to ensure that a set of packages are installed.
-  - type: install-packages
+  - type: install
 ```
 
 The [`hierarchy`] specifies a set of files that should be looked for.
@@ -80,13 +78,13 @@ The following section will detail all the systems which are available.
 
 The hierarchy is a collection of files which contain data.
 
-Some systems query the hierarchy for information, like the `key` setting in [`install-packages`].
+Some systems query the hierarchy for information, like the `key` setting in [`install`].
 This then determines which packages should be installed.
 
 Hierarchy variables can also be made available in [`templates`] by adding a `quickcfg:` tag at the
 top of the template.
 
-[`install-packages`]: #install-packages
+[`install`]: #install
 [`templates`]: #templating
 
 ## Systems
@@ -127,12 +125,12 @@ type: git-sync
 # Where to clone.
 path: home://.oh-my-zsh
 # Remote to clone.
-remote: https://github.com/robbyrussell/oh-my-zsh.git 
+remote: https://github.com/robbyrussell/oh-my-zsh.git
 # Refresh once per day.
 refresh: 1d
 ```
 
-#### `install-packages`
+#### `install`
 
 Compares the set of installed packages, with a set of packages from the hierarchy to install and
 installs any that are missing.
@@ -140,7 +138,7 @@ installs any that are missing.
 Will use `sudo` if needed to install packages.
 
 ```yaml
-type: install-packages
+type: install
 # The provider of the package manager to use.
 provider: pip3
 # Hierarchy key to lookup for packages to install.
@@ -151,7 +149,7 @@ The simplest example of this system is the one that uses the primary provider:
 
 ```yaml
 systems:
-  - type: install-packages
+  - type: install
 ```
 
 This will look up packages under the `packages` key and install it using the primary provider for
@@ -163,6 +161,11 @@ These are the supported providers:
  * `pip`: The Python 2 package manager.
  * `pip3`: The Python 3 package manager.
  * `gem`: The Ruby package manager.
+ * `cargo`: Install packages using `cargo`.
+ * `rust components`: Rust components using `rustup`.
+   * Key: `rust::components`
+ * `rust toolchains`: Rust toolchains using `rustup`.
+   * Key: `rust::toolchains`
 
 By default, any _primary_ provider will be the default provider of the system if it can be
 detected.
@@ -198,6 +201,22 @@ link: .vim/vimrc
 ```
 
 This creates a symbolic link at `path` which contains whatever is specified in `link`.
+
+#### `only-for`
+
+Limit a set of systems based on a condition.
+
+```yaml
+type: only-for
+os: windows
+systems:
+  # Download and install Rust
+  - type: download-and-run
+    name: rustup-init.exe
+    id: install-rust
+    url: https://win.rustup.rs/x86_64
+    args: ["-y"]
+```
 
 ## Templating
 

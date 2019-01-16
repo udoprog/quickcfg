@@ -23,20 +23,46 @@ mod macros;
 mod copy_dir;
 mod download_and_run;
 mod git_sync;
-mod install_packages;
+mod install;
 mod link;
 mod link_dir;
+mod only_for;
 
 use self::copy_dir::CopyDir;
 use self::download_and_run::DownloadAndRun;
 use self::git_sync::GitSync;
-use self::install_packages::InstallPackages;
+use self::install::Install;
 use self::link::Link;
 use self::link_dir::LinkDir;
+use self::only_for::OnlyFor;
+
+/// What should happen after a system has been translated.
+pub enum Translation<'a> {
+    /// Keep the current system.
+    Keep,
+    /// Discard the current system.
+    Discard,
+    /// Expand and discard the current system into the given collection of systems.
+    Expand(&'a [System]),
+}
 
 macro_rules! system_impl {
     ($($name:ident,)*) => {
         impl System {
+            pub fn translate(&self) -> Translation<'_> {
+                use self::System::*;
+
+                match self {
+                    $(
+                    $name(ref system) => match system.translate() {
+                        Translation::Keep => Translation::Keep,
+                        Translation::Discard => Translation::Discard,
+                        Translation::Expand(expanded) => Translation::Expand(expanded),
+                    },
+                    )*
+                }
+            }
+
             /// Get the id of this system.
             pub fn id(&self) -> Option<&str> {
                 use self::System::*;
@@ -98,23 +124,26 @@ pub enum System {
     CopyDir(CopyDir),
     #[serde(rename = "link-dir")]
     LinkDir(LinkDir),
-    #[serde(rename = "install-packages")]
-    InstallPackages(InstallPackages),
+    #[serde(rename = "install")]
+    Install(Install),
     #[serde(rename = "download-and-run")]
     DownloadAndRun(DownloadAndRun),
     #[serde(rename = "link")]
     Link(Link),
     #[serde(rename = "git-sync")]
     GitSync(GitSync),
+    #[serde(rename = "only-for")]
+    OnlyFor(OnlyFor),
 }
 
 system_impl![
     CopyDir,
     LinkDir,
-    InstallPackages,
+    Install,
     DownloadAndRun,
     Link,
     GitSync,
+    OnlyFor,
 ];
 
 /// All inputs for a system.

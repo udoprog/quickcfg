@@ -32,6 +32,8 @@ fn default_refresh() -> Duration {
 }
 
 impl GitSync {
+    system_defaults!(translate);
+
     /// Copy one directory to another.
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
@@ -72,7 +74,7 @@ impl GitSync {
             }
         };
 
-        let git = git::open(path.as_path());
+        let git = git::open(path.as_path())?;
 
         if !git.test()? {
             log::warn!("no working git command found");

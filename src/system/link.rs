@@ -16,6 +16,8 @@ system_struct! {
 }
 
 impl Link {
+    system_defaults!(translate);
+
     /// Copy one directory to another.
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where

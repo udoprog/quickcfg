@@ -1,12 +1,12 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    git::Git, hierarchy::Data, packages, packages::PackageManager, state::State, FileSystem,
+    git::Git, hierarchy::Data, os, packages, packages::PackageManager, state::State, FileSystem,
 };
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -110,7 +110,7 @@ unit![
     CopyTemplate,
     Symlink,
     CreateDir,
-    InstallPackages,
+    Install,
     Download,
     AddMode,
     RunOnce,
@@ -383,24 +383,7 @@ impl fmt::Display for Symlink {
 
 impl Symlink {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
-        use std::fs;
-        use std::os::unix::fs::symlink;
-
-        let Symlink {
-            remove,
-            ref path,
-            ref link,
-        } = *self;
-
-        if remove {
-            log::info!("re-linking {} to {}", path.display(), link.display());
-            fs::remove_file(&path)?;
-        } else {
-            log::info!("linking {} to {}", path.display(), link.display());
-        }
-
-        symlink(link, path)?;
-        Ok(())
+        os::create_symlink(self)
     }
 }
 
@@ -412,14 +395,14 @@ impl From<Symlink> for Unit {
 
 /// Install a number of packages.
 #[derive(Debug)]
-pub struct InstallPackages {
+pub struct Install {
     pub package_manager: Arc<dyn PackageManager>,
     pub all_packages: BTreeSet<String>,
     pub to_install: Vec<String>,
     pub id: String,
 }
 
-impl fmt::Display for InstallPackages {
+impl fmt::Display for Install {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         if self.to_install.is_empty() {
             return write!(fmt, "install packages");
@@ -430,11 +413,11 @@ impl fmt::Display for InstallPackages {
     }
 }
 
-impl InstallPackages {
+impl Install {
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         let UnitInput { state, .. } = input;
 
-        let InstallPackages {
+        let Install {
             ref package_manager,
             ref all_packages,
             ref to_install,
@@ -452,9 +435,9 @@ impl InstallPackages {
     }
 }
 
-impl From<InstallPackages> for Unit {
-    fn from(value: InstallPackages) -> Unit {
-        Unit::InstallPackages(value)
+impl From<Install> for Unit {
+    fn from(value: Install) -> Unit {
+        Unit::Install(value)
     }
 }
 
@@ -491,32 +474,95 @@ impl From<Download> for Unit {
     }
 }
 
+/// Mode modifications to apply.
+#[repr(u32)]
+pub enum Mode {
+    Execute = 1,
+    Read = 2,
+    Write = 4,
+}
+
 /// Change the permissions of the given file.
 #[derive(Debug)]
-pub struct AddMode(pub PathBuf, pub u32);
+pub struct AddMode {
+    pub path: PathBuf,
+    user: u32,
+    group: u32,
+    other: u32,
+}
 
-impl fmt::Display for AddMode {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "add mode {} to {}", self.1, self.0.display())
+impl AddMode {
+    /// Create a new add mode unit.
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        Self {
+            path: path.as_ref().to_owned(),
+            user: 0,
+            group: 0,
+            other: 0,
+        }
+    }
+
+    /// If the added mode is executable.
+    pub fn is_executable(&self) -> bool {
+        if self.user & (Mode::Execute as u32) != 0 {
+            return true;
+        }
+
+        if self.group & (Mode::Execute as u32) != 0 {
+            return true;
+        }
+
+        if self.other & (Mode::Execute as u32) != 0 {
+            return true;
+        }
+
+        false
+    }
+
+    /// Modify user mode.
+    pub fn user(mut self, mode: Mode) -> Self {
+        self.user |= mode as u32;
+        self
+    }
+
+    /// Modify group mode.
+    pub fn group(mut self, mode: Mode) -> Self {
+        self.group |= mode as u32;
+        self
+    }
+
+    /// Modify other mode.
+    pub fn other(mut self, mode: Mode) -> Self {
+        self.other |= mode as u32;
+        self
     }
 }
 
 impl AddMode {
-    fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        use std::fs;
-        use std::os::unix::fs::PermissionsExt;
+    /// Convert into a unix mode.
+    pub fn unix_mode(&self) -> u32 {
+        let AddMode {
+            user, group, other, ..
+        } = *self;
 
-        let UnitInput { .. } = input;
-        let AddMode(ref path, mode) = *self;
+        (user << 3 * 2) + (group << 3) + other
+    }
+}
 
-        let mut perm = path.metadata()?.permissions();
-        let mode = perm.mode() | mode;
-        perm.set_mode(mode);
+impl fmt::Display for AddMode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "add mode {:o} to {}",
+            self.unix_mode(),
+            self.path.display()
+        )
+    }
+}
 
-        fs::set_permissions(&path, perm)
-            .with_context(|_| format_err!("failed to add mode: {}", path.display()))?;
-
-        Ok(())
+impl AddMode {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        os::add_mode(self)
     }
 }
 
@@ -561,6 +607,7 @@ impl RunOnce {
     /// Apply the unit.
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use crate::command::Command;
+        use std::borrow::Cow;
         use std::ffi::OsStr;
 
         let UnitInput { state, .. } = input;
@@ -578,9 +625,9 @@ impl RunOnce {
 
         let cmd = if shell {
             command_args.push(path.as_os_str());
-            Command::new(Self::BIN_SH)
+            Command::new(Cow::from(Path::new(Self::BIN_SH)))
         } else {
-            Command::new(&path)
+            Command::new(Cow::from(path))
         };
 
         for arg in args {

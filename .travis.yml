@@ -1,4 +1,8 @@
 language: rust
+os:
+  - linux
+  - windows
+  - osx
 rust:
   - stable
   - nightly
@@ -8,7 +12,7 @@ branches:
     - master
 script:
   - cargo build --verbose
-  - cargo doc --verbose
+  - cargo doc --no-deps --verbose
   - cargo test --verbose
 env:
   - RUST_BACKTRACE=1

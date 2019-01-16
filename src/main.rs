@@ -20,7 +20,7 @@ fn report_error(e: Error) {
     let mut it = e.iter_chain();
 
     if let Some(e) = it.next() {
-        eprintln!("{}", e);
+        eprintln!("Error: {}", e);
 
         if let Some(bt) = e.backtrace() {
             eprintln!("{}", bt);
@@ -50,13 +50,22 @@ fn try_main() -> Result<(), Error> {
         .parse("trace")
         .init();
 
+    let base_dirs = BaseDirs::new();
+
     let opts = opts::opts()?;
-    let root = opts.root()?;
+    let root = opts.root(base_dirs.as_ref())?;
 
     if opts.debug {
         log::set_max_level(log::LevelFilter::Trace);
     } else {
         log::set_max_level(log::LevelFilter::Info);
+    }
+
+    if let Some(init) = opts.init.as_ref() {
+        log::info!("Initializing root {} from {}", root.display(), init);
+        try_init(&root, init)?;
+    } else {
+        log::info!("Using config from {}", root.display());
     }
 
     let state_path = root.join(".state.yml");
@@ -78,7 +87,15 @@ fn try_main() -> Result<(), Error> {
         .unwrap_or_default()
         .to_state(&config, &now);
 
-    let state = try_apply_config(&opts, &config, &now, &root, &state_dir, state)?;
+    let state = try_apply_config(
+        &opts,
+        &config,
+        &now,
+        base_dirs.as_ref(),
+        &root,
+        &state_dir,
+        state,
+    )?;
 
     if let Some(serialized) = state.serialize() {
         log::trace!("Writing state: {}", state_path.display());
@@ -88,11 +105,19 @@ fn try_main() -> Result<(), Error> {
     Ok(())
 }
 
+/// Try to initialize the repository from the given path.
+fn try_init(root: &Path, init: &str) -> Result<(), Error> {
+    let git = git::open(root)?;
+    git.clone_remote(init)?;
+    Ok(())
+}
+
 /// Internal method to try to apply the given configuration.
 fn try_apply_config<'a>(
     opts: &Opts,
     config: &Config,
     now: &SystemTime,
+    base_dirs: Option<&BaseDirs>,
     root: &Path,
     state_dir: &Path,
     mut state: State<'a>,
@@ -114,15 +139,15 @@ fn try_apply_config<'a>(
         log::info!("Updated found, running...");
     }
 
-    let facts = Facts::load()?;
+    let facts = Facts::load().with_context(|_| "Failed to load facts")?;
     let environment = e::Real;
-    let data = hierarchy::load(&config.hierarchy, root, &facts, environment)?;
+    let data = hierarchy::load(&config.hierarchy, root, &facts, environment)
+        .with_context(|_| "Failed to load hierarchy")?;
 
     let packages = packages::detect(&facts)?;
 
     let allocator = UnitAllocator::default();
 
-    let base_dirs = BaseDirs::new();
     let file_system = FileSystem::new(opts, state_dir, &allocator, &data);
 
     // post-hook for all systems, mapped by id.
@@ -131,11 +156,30 @@ fn try_apply_config<'a>(
     let mut pre_systems = Vec::new();
     let mut errors = Vec::new();
 
+    // translate systems that needs translation.
+    let systems = {
+        use std::collections::VecDeque;
+
+        let mut out = Vec::with_capacity(config.systems.len());
+        let mut queue = VecDeque::new();
+        queue.extend(&config.systems);
+
+        while let Some(system) = queue.pop_back() {
+            match system.translate() {
+                system::Translation::Discard => {}
+                system::Translation::Keep => out.push(system),
+                system::Translation::Expand(systems) => queue.extend(systems),
+            }
+        }
+
+        out
+    };
+
     pool.install(|| {
-        let res = config.systems.par_iter().map(|system| {
+        let res = systems.par_iter().map(|system| {
             let res = system.apply(SystemInput {
                 root: &root,
-                base_dirs: base_dirs.as_ref(),
+                base_dirs,
                 facts: &facts,
                 data: &data,
                 packages: &packages,
@@ -347,7 +391,7 @@ fn try_update_config(
         }
     }
 
-    let git = git::open(root);
+    let git = git::open(root)?;
 
     if !git.test()? {
         log::warn!("no working git command found");

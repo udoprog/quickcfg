@@ -6,6 +6,8 @@ mod cargo;
 mod debian;
 mod python;
 mod ruby;
+mod rustup_components;
+mod rustup_toolchains;
 
 use crate::facts::{self, Facts};
 use failure::{bail, Error};
@@ -43,6 +45,8 @@ impl Provider {
             "pip3" => test(python::PackageManager::new("pip3")),
             "gem" => test(ruby::PackageManager::new()),
             "cargo" => test(cargo::PackageManager::new()),
+            "rust toolchains" => test(rustup_toolchains::PackageManager::new()),
+            "rust components" => test(rustup_components::PackageManager::new()),
             _ => bail!("No package manager provider for `{}`", name),
         }
     }
@@ -90,6 +94,11 @@ pub trait PackageManager: fmt::Debug + Sync + Send {
     /// Might this package manager require interaction?
     fn needs_interaction(&self) -> bool {
         false
+    }
+
+    /// Hierarchy key to use for package manager.
+    fn key(&self) -> Option<&str> {
+        None
     }
 
     /// Get the name of the current package manager.

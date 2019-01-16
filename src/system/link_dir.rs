@@ -16,6 +16,8 @@ system_struct! {
 }
 
 impl LinkDir {
+    system_defaults!(translate);
+
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
         E: Copy + e::Environment,

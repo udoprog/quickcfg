@@ -1,8 +1,8 @@
 //! Set up options.
 
 use clap::{App, Arg};
-use failure::Error;
-use std::env;
+use directories::BaseDirs;
+use failure::{bail, Error};
 use std::path::PathBuf;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -16,6 +16,12 @@ fn app() -> App<'static, 'static> {
             Arg::with_name("root")
                 .long("root")
                 .help("Run using the given path as a configuration root.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("init")
+                .long("init")
+                .help("Initialize against the given repository.")
                 .takes_value(true),
         )
         .arg(
@@ -47,6 +53,7 @@ pub fn opts() -> Result<Opts, Error> {
     let mut opts = Opts::default();
 
     opts.root = matches.value_of("root").map(PathBuf::from);
+    opts.init = matches.value_of("init").map(String::from);
     opts.force = matches.is_present("force");
     opts.non_interactive = matches.is_present("non-interactive");
     opts.updates_only = matches.is_present("updates-only");
@@ -60,6 +67,8 @@ pub fn opts() -> Result<Opts, Error> {
 pub struct Opts {
     /// The root at which the project is running from.
     pub root: Option<PathBuf>,
+    /// Initialize the project from the given repo.
+    pub init: Option<String>,
     /// Force update.
     pub force: bool,
     /// Run in non-interactive mode.
@@ -72,10 +81,13 @@ pub struct Opts {
 
 impl Opts {
     /// Find root directory based on options.
-    pub fn root(&self) -> Result<PathBuf, Error> {
+    pub fn root(&self, base_dirs: Option<&BaseDirs>) -> Result<PathBuf, Error> {
         match self.root.as_ref() {
             Some(root) => Ok(root.to_owned()),
-            None => Ok(env::current_dir()?),
+            None => match base_dirs {
+                Some(base_dirs) => Ok(base_dirs.config_dir().join("quickcfg")),
+                None => bail!("No base directories available"),
+            },
         }
     }
 }
