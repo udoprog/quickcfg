@@ -1,8 +1,8 @@
 use crate::{
-    environment as e,
+    environment as e, os,
     system::SystemInput,
     template::Template,
-    unit::{AddMode, Dependency, Download, RunOnce, SystemUnit},
+    unit::{AddMode, Dependency, Download, Mode, RunOnce, SystemUnit},
 };
 use failure::{format_err, Error};
 use serde_derive::Deserialize;
@@ -22,10 +22,15 @@ system_struct! {
         #[doc="Arguments to add when running command."]
         #[serde(default)]
         pub args: Vec<Template>,
+        #[doc="Rename the binary to this before running it."]
+        #[serde(default)]
+        pub name: Option<String>,
     }
 }
 
 impl DownloadAndRun {
+    system_defaults!(translate);
+
     /// Copy one directory to another.
     pub fn apply<E>(&self, input: SystemInput<E>) -> Result<Vec<SystemUnit>, Error>
     where
@@ -51,7 +56,12 @@ impl DownloadAndRun {
 
         let url = reqwest::Url::parse(&self.url)?;
 
-        let path = file_system.state_path(&id);
+        let name = match self.name.as_ref() {
+            Some(name) => name.as_str(),
+            None => &id,
+        };
+
+        let path = os::exe_path(file_system.state_path(name));
 
         let mut units = Vec::new();
 
@@ -63,7 +73,8 @@ impl DownloadAndRun {
         };
 
         // Make the downloaded file executable.
-        let mut add_mode = allocator.unit(AddMode(path.to_owned(), 0o111));
+        let mode = AddMode::new(path.to_owned()).user(Mode::Execute);
+        let mut add_mode = allocator.unit(mode);
         add_mode
             .dependencies
             .extend(download.as_ref().map(|d| Dependency::Unit(d.id)));

@@ -1,20 +1,20 @@
 //! Packages abstraction for Cargo.
 
-use crate::{command, packages::Package};
+use crate::{command, os, packages::Package};
 use failure::{format_err, Error};
 use std::ffi::OsStr;
 use std::io;
 
 #[derive(Debug)]
 pub struct Cargo {
-    cargo: command::Command,
+    cargo: command::Command<'static>,
 }
 
 impl Cargo {
     /// Create a new cargo command wrapper.
     pub fn new() -> Self {
         Cargo {
-            cargo: command::Command::new("cargo"),
+            cargo: command::Command::new(os::command("cargo")),
         }
     }
 

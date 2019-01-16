@@ -1,6 +1,6 @@
 //! Git abstraction.
 
-use crate::command;
+use crate::{command, os};
 use failure::Error;
 use std::fmt;
 use std::io;
@@ -10,16 +10,16 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub struct GitCommand {
     pub path: PathBuf,
-    command: command::Command,
+    command: command::Command<'static>,
 }
 
 impl GitCommand {
     /// Construct a new git integration.
-    pub fn new(path: impl AsRef<Path>) -> GitCommand {
-        GitCommand {
+    pub fn new(path: impl AsRef<Path>) -> Result<GitCommand, Error> {
+        Ok(GitCommand {
             path: path.as_ref().to_owned(),
-            command: command::Command::new("git"),
-        }
+            command: command::Command::new(os::command("git")),
+        })
     }
 
     fn rev_parse(&self, git_ref: &str) -> Result<String, Error> {
@@ -137,6 +137,6 @@ pub trait Git: Send + Sync + fmt::Debug {
 }
 
 /// Open the given path.
-pub fn open(path: impl AsRef<Path>) -> Box<Git> {
-    Box::new(GitCommand::new(path))
+pub fn open(path: impl AsRef<Path>) -> Result<Box<Git>, Error> {
+    Ok(Box::new(GitCommand::new(path)?))
 }

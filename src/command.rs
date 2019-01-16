@@ -1,7 +1,8 @@
 //! Helper to run external commands.
 
 use failure::{bail, Error, Fail};
-use std::ffi::{OsStr, OsString};
+use std::borrow::Cow;
+use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -52,16 +53,16 @@ impl fmt::Display for OutputError {
 
 /// A command wrapper that simplifies interaction with external commands.
 #[derive(Debug, Clone)]
-pub struct Command {
-    name: OsString,
+pub struct Command<'name> {
+    name: Cow<'name, Path>,
     working_directory: Option<PathBuf>,
 }
 
-impl Command {
+impl<'name> Command<'name> {
     /// Construct a new command wrapper.
-    pub fn new(name: impl AsRef<OsStr>) -> Command {
+    pub fn new(name: Cow<'name, Path>) -> Command<'name> {
         Command {
-            name: name.as_ref().to_owned(),
+            name,
             working_directory: None,
         }
     }
@@ -70,7 +71,7 @@ impl Command {
     where
         S: AsRef<OsStr>,
     {
-        let mut cmd = process::Command::new(&self.name);
+        let mut cmd = process::Command::new(self.name.as_os_str());
         cmd.args(args);
 
         if let Some(working_directory) = self.working_directory.as_ref() {

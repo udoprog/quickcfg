@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 use std::env;
 use std::fs::File;
+use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -143,7 +144,18 @@ pub fn load<'a>(
 
         let path = path.to_path(root);
 
-        let modified = path.metadata()?.modified()?;
+        let m = match path.metadata() {
+            Ok(m) => m,
+            Err(e) => match e.kind() {
+                io::ErrorKind::NotFound => {
+                    log::trace!("skipping missing file: {}", path.display());
+                    continue;
+                }
+                _ => return Err(Error::from(e)),
+            },
+        };
+
+        let modified = m.modified()?;
 
         last_modified = Some(match last_modified {
             Some(previous) if previous > modified => previous,

@@ -1,20 +1,20 @@
 //! Packages abstraction for pip/pip3.
 
-use crate::{command, packages::Package};
+use crate::{command, os, packages::Package};
 use failure::{format_err, Error};
 use std::ffi::OsStr;
 use std::io;
 
 #[derive(Debug)]
 pub struct Pip {
-    command: command::Command,
+    command: command::Command<'static>,
 }
 
 impl Pip {
     /// Create a new pip command wrapper.
     pub fn new(name: &'static str) -> Self {
         Pip {
-            command: command::Command::new(name),
+            command: command::Command::new(os::command(name)),
         }
     }
 

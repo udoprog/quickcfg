@@ -1,22 +1,22 @@
 //! Packages abstraction for Debian.
 
-use crate::{command, packages::Package};
+use crate::{command, os, packages::Package};
 use failure::{format_err, Error};
 use std::ffi::OsStr;
 use std::io;
 
 #[derive(Debug)]
 pub struct Apt {
-    sudo: command::Command,
-    apt: command::Command,
+    sudo: command::Command<'static>,
+    apt: command::Command<'static>,
 }
 
 impl Apt {
     /// Create a new dpkg-query command wrapper.
     pub fn new() -> Self {
         Apt {
-            sudo: command::Command::new("sudo"),
-            apt: command::Command::new("apt"),
+            sudo: command::Command::new(os::command("sudo")),
+            apt: command::Command::new(os::command("apt")),
         }
     }
 
@@ -55,14 +55,14 @@ impl Apt {
 
 #[derive(Debug)]
 pub struct DpkgQuery {
-    dpkg_query: command::Command,
+    dpkg_query: command::Command<'static>,
 }
 
 impl DpkgQuery {
     /// Create a new dpkg-query command wrapper.
     pub fn new() -> Self {
         DpkgQuery {
-            dpkg_query: command::Command::new("dpkg-query"),
+            dpkg_query: command::Command::new(os::command("dpkg-query")),
         }
     }
 
