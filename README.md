@@ -14,6 +14,20 @@ I've tried my best to make all operations non-destructive, but beware of bugs!
 
 ![Example](gfx/example1.gif)
 
+## Getting started
+
+To get started, you can have quickcfg clone the configuration for you in the default location:
+
+```bash
+quickcfg --init <git-url>
+```
+
+This will put the checked out configuration in the default config location for you platform.
+For example:
+
+* Windows - `%APPDATA%\quickcfg`
+* Linux - `$HOME/.config/quickcfg`
+
 ## Features
 
 **Zero dependencies**, All you need is the `quickcfg` binary and your configuration repo.
@@ -34,8 +48,8 @@ following to your `.zshrc` or `.bashrc`:
 
 ```bash
 if command -v quickcfg > /dev/null 2>&1; then
-    quickcfg --updates-only --root $HOME/.dotfiles
-    alias upd="quickcfg --root $HOME/.dotfiles"
+    quickcfg --updates-only
+    alias upd="quickcfg"
 fi
 ```
 

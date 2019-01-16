@@ -62,10 +62,10 @@ fn try_main() -> Result<(), Error> {
     }
 
     if let Some(init) = opts.init.as_ref() {
-        log::info!("Initializing root {} from {}", root.display(), init);
+        log::info!("Initializing {} from {}", root.display(), init);
         try_init(&root, init)?;
     } else {
-        log::info!("Using config from {}", root.display());
+        log::trace!("Using config from {}", root.display());
     }
 
     let state_path = root.join(".state.yml");
