@@ -73,9 +73,11 @@ fn try_main() -> Result<(), Error> {
         log::set_max_level(log::LevelFilter::Info);
     }
 
+    let git_system = git::setup().with_context(|_| "failed to set up git system")?;
+
     if let Some(init) = opts.init.as_ref() {
         log::info!("Initializing {} from {}", root.display(), init);
-        try_init(&root, init)?;
+        try_init(&*git_system, init, &root)?;
     } else {
         log::trace!("Using config from {}", root.display());
     }
@@ -96,6 +98,7 @@ fn try_main() -> Result<(), Error> {
         .to_state(&config, &now);
 
     let state = try_apply_config(
+        &*git_system,
         &opts,
         &config,
         &now,
@@ -114,14 +117,14 @@ fn try_main() -> Result<(), Error> {
 }
 
 /// Try to initialize the repository from the given path.
-fn try_init(root: &Path, init: &str) -> Result<(), Error> {
-    let git = git::open(root)?;
-    git.clone_remote(init)?;
+fn try_init(git_system: &dyn git::GitSystem, url: &str, root: &Path) -> Result<(), Error> {
+    let _ = git::GitSystem::clone(git_system, url, root)?;
     Ok(())
 }
 
 /// Internal method to try to apply the given configuration.
 fn try_apply_config<'a>(
+    git_system: &'a dyn git::GitSystem,
     opts: &Opts,
     config: &Config,
     now: &SystemTime,
@@ -136,7 +139,7 @@ fn try_apply_config<'a>(
         .build()
         .with_context(|_| format_err!("Failed to construct thread pool"))?;
 
-    if !try_update_config(opts, config, now, root, &mut state)? {
+    if !try_update_config(git_system, opts, config, now, root, &mut state)? {
         // if we only want to run on updates, exit now.
         if opts.updates_only {
             return Ok(state);
@@ -195,8 +198,9 @@ fn try_apply_config<'a>(
                 allocator: &allocator,
                 file_system: &file_system,
                 state: &state,
-                now: now,
-                opts: opts,
+                now,
+                opts,
+                git_system,
             });
 
             match res {
@@ -300,6 +304,7 @@ fn try_apply_config<'a>(
                         read_state: &state,
                         state: &mut s,
                         now,
+                        git_system,
                     }) {
                         Ok(()) => {
                             scheduler.mark(unit);
@@ -326,6 +331,7 @@ fn try_apply_config<'a>(
                         read_state: &state,
                         state: &mut s,
                         now,
+                        git_system,
                     });
 
                     match res {
@@ -377,6 +383,7 @@ fn try_apply_config<'a>(
 ///
 /// Returns `true` if we have successfully downloaded a new update. `false` otherwise.
 fn try_update_config(
+    git_system: &dyn git::GitSystem,
     opts: &Opts,
     config: &Config,
     now: &SystemTime,
@@ -399,13 +406,13 @@ fn try_update_config(
         }
     }
 
-    let git = git::open(root)?;
-
-    if !git.test()? {
+    if !git_system.test()? {
         log::warn!("no working git command found");
         state.touch("git");
         return Ok(false);
     }
+
+    let git = git_system.open(root)?;
 
     if !git.needs_update()? {
         state.touch("git");

@@ -1,7 +1,8 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    git::Git, hierarchy::Data, os, packages, packages::PackageManager, state::State, FileSystem,
+    git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager, state::State,
+    FileSystem,
 };
 use failure::{format_err, Error, Fail, ResultExt};
 use std::collections::BTreeSet;
@@ -65,6 +66,8 @@ pub struct UnitInput<'a, 's> {
     pub state: &'a mut State<'s>,
     /// Current timestamp.
     pub now: &'a SystemTime,
+    /// Current git system.
+    pub git_system: &'a dyn GitSystem,
 }
 
 /// Declare unit enum.
@@ -658,10 +661,10 @@ impl From<RunOnce> for Unit {
 pub struct GitClone {
     /// The ID of the thing being cloned.
     pub id: String,
-    /// Git repository.
-    pub git: Box<dyn Git>,
     /// Remote to clone.
     pub remote: String,
+    /// Git repository.
+    pub path: PathBuf,
 }
 
 impl fmt::Display for GitClone {
@@ -670,7 +673,7 @@ impl fmt::Display for GitClone {
             fmt,
             "git clone `{}` to `{}`",
             self.remote,
-            self.git.path().display()
+            self.path.display()
         )
     }
 }
@@ -678,16 +681,18 @@ impl fmt::Display for GitClone {
 impl GitClone {
     /// Apply the unit.
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        let UnitInput { state, .. } = input;
+        let UnitInput {
+            state, git_system, ..
+        } = input;
 
         let GitClone {
-            ref git,
-            ref remote,
             ref id,
+            ref remote,
+            ref path,
         } = *self;
 
-        log::info!("Cloning `{}` into `{}`", remote, git.path().display());
-        git.clone_remote(remote)?;
+        log::info!("Cloning `{}` into `{}`", remote, path.display());
+        GitSystem::clone(git_system, remote, path)?;
         state.touch(&id);
         Ok(())
     }
@@ -705,27 +710,31 @@ pub struct GitUpdate {
     /// The ID of the thing being cloned.
     pub id: String,
     /// Git repository.
-    pub git: Box<dyn Git>,
+    pub path: PathBuf,
     /// If the update should be forced.
     pub force: bool,
 }
 
 impl fmt::Display for GitUpdate {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "git update: {}", self.git.path().display())
+        write!(fmt, "git update: {}", self.path.display())
     }
 }
 
 impl GitUpdate {
     /// Apply the unit.
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
-        let UnitInput { state, .. } = input;
+        let UnitInput {
+            state, git_system, ..
+        } = input;
 
         let GitUpdate {
-            ref git,
-            force,
             ref id,
+            ref path,
+            force,
         } = *self;
+
+        let git = git_system.open(path)?;
 
         if git.needs_update()? {
             if force {

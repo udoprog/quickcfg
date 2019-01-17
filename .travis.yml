@@ -5,14 +5,13 @@ os:
   - osx
 rust:
   - stable
-  - nightly
 cache: cargo
 branches:
   only:
     - master
 script:
-  - cargo build --verbose
-  - cargo doc --no-deps --verbose
-  - cargo test --verbose
+  - cargo build
+  - cargo build --no-default-features
+  - cargo test
 env:
   - RUST_BACKTRACE=1
