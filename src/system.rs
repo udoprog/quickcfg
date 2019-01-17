@@ -3,6 +3,7 @@
 use crate::{
     environment as e,
     facts::Facts,
+    git,
     hierarchy::Data,
     opts::Opts,
     packages,
@@ -173,6 +174,8 @@ where
     pub now: &'a SystemTime,
     /// Current optsion.
     pub opts: &'a Opts,
+    /// The current git system.
+    pub git_system: &'a dyn git::GitSystem,
 }
 
 /// Helper structure used to resolve dependencies.

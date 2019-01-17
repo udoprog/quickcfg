@@ -1,5 +1,5 @@
 use crate::{
-    config, environment as e, git,
+    config, environment as e,
     system::SystemInput,
     template::Template,
     unit::{GitClone, GitUpdate, SystemUnit},
@@ -49,6 +49,7 @@ impl GitSync {
             environment,
             now,
             opts,
+            git_system,
             ..
         } = input;
 
@@ -74,17 +75,15 @@ impl GitSync {
             }
         };
 
-        let git = git::open(path.as_path())?;
-
-        if !git.test()? {
+        if !git_system.test()? {
             log::warn!("no working git command found");
             return Ok(units);
         }
 
-        if git.path().is_dir() {
+        if path.is_dir() {
             let git_update = allocator.unit(GitUpdate {
                 id,
-                git,
+                path,
                 force: opts.force,
             });
 
@@ -93,7 +92,7 @@ impl GitSync {
         }
 
         // Initial clone.
-        let parent_dir = match git.path().parent() {
+        let parent_dir = match path.parent() {
             Some(parent) if !parent.is_dir() => {
                 units.extend(file_system.create_dir_all(parent)?);
                 Some(file_system.dir_dependency(parent)?)
@@ -101,14 +100,16 @@ impl GitSync {
             _ => None,
         };
 
+        let dir_dependencies = file_system.dir_dependency(&path)?;
+
         let mut git_clone = allocator.unit(GitClone {
             id,
-            git,
+            path,
             remote: self.remote.to_string(),
         });
 
         git_clone.dependencies.extend(parent_dir);
-        git_clone.provides.push(file_system.dir_dependency(&path)?);
+        git_clone.provides.push(dir_dependencies);
 
         units.push(git_clone);
         return Ok(units);
