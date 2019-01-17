@@ -16,9 +16,9 @@ pub mod system;
 mod template;
 pub mod unit;
 
+pub use crate::command::Command;
 pub use crate::config::Config;
 pub use crate::file_operations::{Load, Save};
 pub use crate::file_system::FileSystem;
 pub use crate::state::{DiskState, State};
 pub use crate::template::Template;
-pub use crate::command::Command;

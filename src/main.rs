@@ -52,7 +52,7 @@ fn try_main() -> Result<(), Error> {
 
     let base_dirs = BaseDirs::new();
 
-    let opts = opts::opts()?;
+    let mut opts = opts::opts()?;
     let root = opts.root(base_dirs.as_ref())?;
 
     let config_path = root.join("quickcfg.yml");
@@ -73,6 +73,15 @@ fn try_main() -> Result<(), Error> {
         log::set_max_level(log::LevelFilter::Info);
     }
 
+    if !root.is_dir() && opts.init.is_none() {
+        if opts.prompt(
+            "No configuration directory, would you like to set it up?",
+            true,
+        )? {
+            opts.init = opts.input("[Git Repository]")?;
+        }
+    }
+
     let git_system = git::setup().with_context(|_| "failed to set up git system")?;
 
     if let Some(init) = opts.init.as_ref() {
@@ -80,6 +89,10 @@ fn try_main() -> Result<(), Error> {
         try_init(&*git_system, init, &root)?;
     } else {
         log::trace!("Using config from {}", root.display());
+    }
+
+    if !root.is_dir() {
+        bail!("Missing configuration directory: {}", root.display());
     }
 
     if !state_dir.is_dir() {
@@ -400,10 +413,8 @@ fn try_update_config(
         log::info!("{}s since last git update...", duration.as_secs());
     };
 
-    if !opts.non_interactive {
-        if !prompt("Do you want to check for updates?")? {
-            return Ok(false);
-        }
+    if !opts.prompt("Do you want to check for updates?", true)? {
+        return Ok(false);
     }
 
     if !git_system.test()? {
@@ -427,31 +438,4 @@ fn try_update_config(
 
     state.touch("git");
     Ok(true)
-}
-
-/// Prompt for input.
-fn prompt(question: &str) -> Result<bool, Error> {
-    use std::io::{self, Write};
-
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut input = String::new();
-
-    loop {
-        write!(stdout, "{} [Y/n] ", question)?;
-        stdout.flush()?;
-
-        input.clear();
-        stdin.read_line(&mut input)?;
-
-        match input.to_lowercase().as_str().trim() {
-            // NB: default.
-            "" => return Ok(true),
-            "y" | "ye" | "yes" => return Ok(true),
-            "n" | "no" => return Ok(false),
-            _ => {
-                writeln!(stdout, "Please response with 'yes' or 'no' (or 'y' or 'n')")?;
-            }
-        }
-    }
 }

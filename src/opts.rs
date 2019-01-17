@@ -80,7 +80,7 @@ pub struct Opts {
     /// Force update.
     pub force: bool,
     /// Run in non-interactive mode.
-    pub non_interactive: bool,
+    non_interactive: bool,
     /// Only run if there are updates to the repo.
     pub updates_only: bool,
     /// Enable debug logging.
@@ -97,5 +97,61 @@ impl Opts {
                 None => bail!("No base directories available"),
             },
         }
+    }
+
+    /// Prompt for yes/no.
+    pub fn prompt(&self, question: &str, default: bool) -> Result<bool, Error> {
+        use std::io::{self, Write};
+
+        if self.non_interactive {
+            return Ok(default);
+        }
+
+        let stdin = io::stdin();
+        let mut stdout = io::stdout();
+        let mut input = String::new();
+
+        let p = match default {
+            true => "[Y/n]",
+            false => "[y/N]",
+        };
+
+        loop {
+            write!(stdout, "{} {} ", question, p)?;
+            stdout.flush()?;
+
+            input.clear();
+            stdin.read_line(&mut input)?;
+
+            match input.to_lowercase().as_str().trim() {
+                // NB: default.
+                "" => return Ok(default),
+                "y" | "ye" | "yes" => return Ok(true),
+                "n" | "no" => return Ok(false),
+                _ => {
+                    writeln!(stdout, "Please response with 'yes' or 'no' (or 'y' or 'n')")?;
+                }
+            }
+        }
+    }
+
+    /// Prompt for input.
+    pub fn input(&self, prompt: &str) -> Result<Option<String>, Error> {
+        use std::io::{self, Write};
+
+        if self.non_interactive {
+            return Ok(None);
+        }
+
+        let stdin = io::stdin();
+        let mut stdout = io::stdout();
+
+        write!(stdout, "{} ", prompt)?;
+        stdout.flush()?;
+
+        let mut input = String::new();
+        stdin.read_line(&mut input)?;
+
+        Ok(Some(input.trim().to_string()))
     }
 }
