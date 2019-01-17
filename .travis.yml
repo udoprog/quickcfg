@@ -5,7 +5,6 @@ os:
   - osx
 rust:
   - stable
-  - nightly
 cache: cargo
 branches:
   only:
