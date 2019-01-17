@@ -41,4 +41,4 @@ filetime = "0.2"
 git2 = {version = "0.8", optional = true}
 
 [features]
-default = []
+default = ["git2"]
