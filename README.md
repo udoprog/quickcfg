@@ -59,7 +59,7 @@ if command -v qc > /dev/null 2>&1; then
 fi
 ```
 
-Every time you open a shell quickcfg will not check if your dotfiles are up-to-date.
+Every time you open a shell quickcfg will now check if your dotfiles are up-to-date.
 
 You control how frequently by setting the `git_refresh` option in `quickcfg.yml`:
 
