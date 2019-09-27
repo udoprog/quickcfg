@@ -79,7 +79,7 @@ impl DpkgQuery {
                 continue;
             }
 
-            let mut it = line.split(" ");
+            let mut it = line.split(' ');
             let status = it.next().ok_or_else(|| format_err!("expected status"))?;
             let name = it
                 .next()

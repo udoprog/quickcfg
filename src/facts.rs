@@ -10,7 +10,7 @@ use std::hash::Hash;
 use std::io;
 use std::path::Path;
 
-pub const DISTRO: &'static str = "distro";
+pub const DISTRO: &str = "distro";
 
 /// The holder of all the facts detected in the system.
 pub struct Facts(HashMap<String, String>);

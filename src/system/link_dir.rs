@@ -2,11 +2,10 @@ use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::Error;
-use serde_derive::Deserialize;
 use std::fmt;
 
-/// Recursively creates directories and copies files.
 system_struct! {
+    #[doc = "Recursively creates directories and copies files."]
     LinkDir {
         #[doc="Where to link files from."]
         pub from: Template,
@@ -71,7 +70,7 @@ impl LinkDir {
             units.extend(file_system.symlink(&to_path, link, to.as_ref())?);
         }
 
-        return Ok(units);
+        Ok(units)
     }
 }
 

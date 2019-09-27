@@ -43,7 +43,7 @@ impl Pip {
                 continue;
             }
 
-            let mut it = line.split(" ");
+            let mut it = line.split(' ');
             let name = it
                 .next()
                 .ok_or_else(|| format_err!("expected package name"))?;
@@ -84,7 +84,7 @@ impl PackageManager {
     /// Construct a new pip package manager.
     pub fn new(name: &'static str) -> Self {
         PackageManager {
-            name: name,
+            name,
             pip: Pip::new(name),
         }
     }

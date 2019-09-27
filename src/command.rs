@@ -96,7 +96,7 @@ impl<'name> Command<'name> {
     {
         let lines = self
             .run_stdout(args)?
-            .split("\n")
+            .split('\n')
             .map(|s| s.to_string())
             .collect();
 

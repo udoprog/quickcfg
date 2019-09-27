@@ -93,10 +93,10 @@ impl Template {
 
         return Ok(Template { parts });
 
-        fn var<'s>(
-            input: &'s str,
+        fn var(
+            input: &str,
             mut it: impl Iterator<Item = (usize, char)>,
-        ) -> Result<(usize, &'s str), Error> {
+        ) -> Result<(usize, &str), Error> {
             let (start, _) = it.next().ok_or_else(|| format_err!("missing char"))?;
 
             while let Some((index, c)) = it.next() {
@@ -109,13 +109,13 @@ impl Template {
             bail!("missing closing '}'")
         }
 
-        fn environ<'s>(
-            input: &'s str,
+        fn environ(
+            input: &str,
             mut it: impl Iterator<Item = (usize, char)>,
-        ) -> Result<(usize, &'s str), Error> {
+        ) -> Result<(usize, &str), Error> {
             let (start, _) = it.next().ok_or_else(|| format_err!("missing char"))?;
 
-            while let Some((index, c)) = it.next() {
+            for (index, c) in it {
                 match c {
                     _ if c.is_uppercase() => continue,
                     '_' => continue,

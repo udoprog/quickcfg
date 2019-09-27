@@ -1,7 +1,6 @@
 //! Model for configuration file.
 use crate::{system::System, template::Template};
 use serde::{Deserialize, Deserializer};
-use serde_derive::Deserialize;
 use std::time::Duration;
 
 /// Default git refresh in seconds.

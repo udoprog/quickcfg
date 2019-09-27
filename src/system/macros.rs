@@ -1,12 +1,15 @@
 /// Macro to populate a system struct with its base fields.
 macro_rules! system_struct {
-    ($name:ident {
+    (
+        $(#[$name_meta:meta])*
+        $name:ident {
         $(
         $(#[$attr:meta])*
         pub $field:ident : $field_ty:ty,
         )*
     }) => {
-        #[derive(Deserialize, Debug, PartialEq, Eq)]
+        $(#[$name_meta])*
+        #[derive(::serde::Deserialize, Debug, PartialEq, Eq)]
         pub struct $name {
             /// Id of this system.
             pub id: Option<String>,
@@ -19,11 +22,11 @@ macro_rules! system_struct {
         }
 
         impl $name {
-            pub fn id<'a>(&'a self) -> Option<&'a str> {
+            pub fn id(&self) -> Option<&str> {
                 self.id.as_ref().map(|s| s.as_str())
             }
 
-            pub fn requires<'a>(&'a self) -> &[String] {
+            pub fn requires(&self) -> &[String] {
                 &self.requires
             }
         }

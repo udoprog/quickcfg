@@ -4,12 +4,11 @@ use crate::{
     unit::{self, SystemUnit},
 };
 use failure::{format_err, Error};
-use serde_derive::Deserialize;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
-/// Builds one unit for every batch of packages to install.
 system_struct! {
+    #[doc = "Builds one unit for every batch of packages to install."]
     Install {
         #[doc="Hierarchy key to lookup for packages to install."]
         #[serde(default = "default_key")]
@@ -116,7 +115,7 @@ impl Install {
         // NB: sometimes requires user input.
         unit.thread_local = thread_local;
         units.push(unit);
-        return Ok(units);
+        Ok(units)
     }
 }
 

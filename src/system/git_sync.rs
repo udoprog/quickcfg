@@ -5,14 +5,13 @@ use crate::{
     unit::{GitClone, GitUpdate, SystemUnit},
 };
 use failure::{format_err, Error};
-use serde_derive::Deserialize;
 use std::fmt;
 use std::time::Duration;
 
 const DEFAULT_REFRESH: u64 = 3600 * 24;
 
-/// Checkout a git repository to the given path.
 system_struct! {
+    #[doc = "Checkout a git repository to the given path."]
     GitSync {
         #[doc="Path to check out the repo."]
         pub path: Template,
@@ -112,7 +111,7 @@ impl GitSync {
         git_clone.provides.push(dir_dependencies);
 
         units.push(git_clone);
-        return Ok(units);
+        Ok(units)
     }
 }
 

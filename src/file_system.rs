@@ -166,18 +166,19 @@ impl<'a> FileSystem<'a> {
             None => return Ok(None),
         };
 
-        let mut unit = match template {
-            true => self.allocator.unit(CopyTemplate {
+        let mut unit = if template {
+            self.allocator.unit(CopyTemplate {
                 from: from.to_owned(),
                 from_modified,
                 to: to.to_owned(),
                 to_exists: to_meta.is_some(),
-            }),
-            false => self.allocator.unit(CopyFile {
+            })
+        } else {
+            self.allocator.unit(CopyFile {
                 from: from.to_owned(),
                 from_modified,
                 to: to.to_owned(),
-            }),
+            })
         };
 
         if let Some(parent) = to.parent() {
@@ -210,7 +211,7 @@ impl<'a> FileSystem<'a> {
             let mut dirs = Vec::new();
 
             let mut c = dir;
-            dirs.push(c.clone());
+            dirs.push(c);
 
             // Build up collection to create until we have found what we wanted.
             while let Some(parent) = c.parent() {
@@ -361,14 +362,14 @@ impl<'a> FileSystem<'a> {
 
     /// Update timestamps for the given path.
     pub fn touch(path: &Path, timestamp: &SystemTime) -> Result<(), Error> {
-        use filetime::{self, FileTime};
+        use filetime::FileTime;
 
-        let accessed = FileTime::from_system_time(timestamp.clone());
-        let modified = accessed.clone();
+        let accessed = FileTime::from_system_time(*timestamp);
+        let modified = accessed;
 
         filetime::set_file_times(path, accessed, modified)
             .with_context(|_| format_err!("Failed to update timestamps for: {}", path.display()))?;
-        return Ok(());
+        Ok(())
     }
 
     /// Test if we should copy the file.
@@ -397,17 +398,18 @@ impl<'a> FileSystem<'a> {
 
         let to_modified = to_meta.modified()?;
 
-        let modified = match template {
+        let modified = if template {
             // use the modification time of the hierarchy if modified more recently.
-            true => match self.data.last_modified.as_ref() {
+            match self.data.last_modified.as_ref() {
                 Some(data_modified) if from_modified < *data_modified => data_modified,
                 _ => &from_modified,
-            },
-            false => &from_modified,
+            }
+        } else {
+            &from_modified
         };
 
         if *modified != to_modified {
-            return Ok(Some(modified.clone()));
+            return Ok(Some(*modified));
         }
 
         Ok(None)

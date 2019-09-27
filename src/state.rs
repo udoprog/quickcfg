@@ -3,7 +3,7 @@
 use crate::config::Config;
 use failure::Error;
 use fxhash::FxHasher64;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::time::SystemTime;
@@ -31,7 +31,7 @@ pub struct DiskState {
 
 impl DiskState {
     /// Convert into a state.
-    pub fn to_state<'a>(self, config: &'a Config, now: &'a SystemTime) -> State<'a> {
+    pub fn into_state<'a>(self, config: &'a Config, now: &'a SystemTime) -> State<'a> {
         State {
             dirty: false,
             last_update: self.last_update,

@@ -57,7 +57,7 @@ impl Gem {
                 continue;
             }
 
-            let mut it = line.split(" ");
+            let mut it = line.split(' ');
 
             let name = it
                 .next()

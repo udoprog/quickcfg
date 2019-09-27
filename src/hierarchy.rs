@@ -9,7 +9,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
-const HEADER: &'static str = "quickcfg:";
+const HEADER: &str = "quickcfg:";
 
 /// Wrapper for hierarchy data.
 pub struct Data {
@@ -76,7 +76,7 @@ impl Data {
         let mut m = Mapping::default();
 
         // look at the first 5 lines.
-        for line in content.split("\n").take(5) {
+        for line in content.split('\n').take(5) {
             let index = match line.find(HEADER) {
                 None => continue,
                 Some(index) => index,
@@ -84,14 +84,14 @@ impl Data {
 
             let spec = &line[index + HEADER.len()..].trim();
 
-            for part in spec.split(",") {
+            for part in spec.split(',') {
                 let part = part.trim();
 
                 if part.is_empty() {
                     continue;
                 }
 
-                let mut it = part.splitn(2, ":");
+                let mut it = part.splitn(2, ':');
 
                 let key = match it.next() {
                     Some(key) => key,
@@ -122,7 +122,7 @@ impl Data {
             break;
         }
 
-        return Ok(m);
+        Ok(m)
     }
 }
 
@@ -172,8 +172,6 @@ pub fn load<'a>(
 
     /// Extend the existing mapping from the given hierarchy.
     fn load_mapping(path: &Path) -> Result<serde_yaml::Mapping, Error> {
-        use serde_yaml::Value;
-
         let file = match File::open(&path) {
             Ok(file) => file,
             Err(e) => match e.kind() {
@@ -182,7 +180,7 @@ pub fn load<'a>(
         };
 
         match serde_yaml::from_reader(file)? {
-            Value::Mapping(m) => return Ok(m),
+            Value::Mapping(m) => Ok(m),
             _ => bail!("exists, but is not a mapping"),
         }
     }

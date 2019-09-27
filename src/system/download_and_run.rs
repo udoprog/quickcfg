@@ -5,11 +5,10 @@ use crate::{
     unit::{AddMode, Dependency, Download, Mode, RunOnce, SystemUnit},
 };
 use failure::{format_err, Error};
-use serde_derive::Deserialize;
 use std::fmt;
 
-/// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
+    #[doc = "Builds one unit for every directory and file that needs to be copied."]
     DownloadAndRun {
         #[doc="URL to download."]
         pub url: String,
@@ -99,7 +98,7 @@ impl DownloadAndRun {
         units.push(add_mode);
         units.push(run);
 
-        return Ok(units);
+        Ok(units)
     }
 }
 

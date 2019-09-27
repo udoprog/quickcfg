@@ -55,7 +55,7 @@ impl Provider {
 /// Detect which package provider to use.
 pub fn detect(facts: &Facts) -> Result<Provider, Error> {
     let default = by_distro(facts)?;
-    return Ok(Provider { default });
+    Ok(Provider { default })
 }
 
 /// Detect package manager by distro.

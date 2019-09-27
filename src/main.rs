@@ -60,6 +60,7 @@ fn try_main() -> Result<(), Error> {
     let state_dir = root.join(".state");
 
     if opts.paths {
+        println!("OS: {}", std::env::consts::OS);
         println!("Root: {}", root.display());
         println!("Configuration File: {}", config_path.display());
         println!("State File: {}", state_path.display());
@@ -73,13 +74,14 @@ fn try_main() -> Result<(), Error> {
         log::set_max_level(log::LevelFilter::Info);
     }
 
-    if !root.is_dir() && opts.init.is_none() {
-        if opts.prompt(
+    if !root.is_dir()
+        && opts.init.is_none()
+        && opts.prompt(
             "No configuration directory, would you like to set it up?",
             true,
-        )? {
-            opts.init = opts.input("[Git Repository]")?;
-        }
+        )?
+    {
+        opts.init = opts.input("[Git Repository]")?;
     }
 
     let git_system = git::setup().with_context(|_| "failed to set up git system")?;
@@ -108,7 +110,7 @@ fn try_main() -> Result<(), Error> {
 
     let state = DiskState::load(&state_path)?
         .unwrap_or_default()
-        .to_state(&config, &now);
+        .into_state(&config, &now);
 
     let state = try_apply_config(
         &*git_system,
@@ -135,6 +137,7 @@ fn try_init(git_system: &dyn git::GitSystem, url: &str, root: &Path) -> Result<(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Internal method to try to apply the given configuration.
 fn try_apply_config<'a>(
     git_system: &'a dyn git::GitSystem,

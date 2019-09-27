@@ -18,10 +18,10 @@ impl GitSystem {
 impl super::GitSystem for GitSystem {
     fn test(&self) -> Result<bool, Error> {
         match self.command.run(&["--version"]) {
-            Ok(output) => return Ok(output.status.success()),
+            Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 io::ErrorKind::NotFound => Ok(false),
-                _ => return Err(e.into()),
+                _ => Err(e.into()),
             },
         }
     }

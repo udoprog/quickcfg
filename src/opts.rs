@@ -111,10 +111,7 @@ impl Opts {
         let mut stdout = io::stdout();
         let mut input = String::new();
 
-        let p = match default {
-            true => "[Y/n]",
-            false => "[y/N]",
-        };
+        let p = if default { "[Y/n]" } else { "[y/N]" };
 
         loop {
             write!(stdout, "{} {} ", question, p)?;

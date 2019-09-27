@@ -2,11 +2,10 @@ use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::Error;
-use serde_derive::Deserialize;
 use std::fmt;
 
-/// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
+    #[doc = "Builds one unit for every directory and file that needs to be copied."]
     Link {
         #[doc="Where to create the symlink."]
         pub path: Template,

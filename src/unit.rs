@@ -548,7 +548,7 @@ impl AddMode {
             user, group, other, ..
         } = *self;
 
-        (user << 3 * 2) + (group << 3) + other
+        (user << (3 * 2)) + (group << 3) + other
     }
 }
 

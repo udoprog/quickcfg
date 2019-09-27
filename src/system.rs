@@ -13,7 +13,7 @@ use crate::{
 };
 use directories::BaseDirs;
 use failure::Error;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;

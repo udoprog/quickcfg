@@ -2,12 +2,11 @@ use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
 use failure::{bail, Error};
-use serde_derive::Deserialize;
 use std::fmt;
 use std::fs;
 
-/// Builds one unit for every directory and file that needs to be copied.
 system_struct! {
+    #[doc = "Builds one unit for every directory and file that needs to be copied."]
     CopyDir {
         #[doc="Where to copy from."]
         pub from: Template,
@@ -91,7 +90,7 @@ impl CopyDir {
             );
         }
 
-        return Ok(units);
+        Ok(units)
     }
 }
 

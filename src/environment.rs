@@ -25,7 +25,7 @@ impl Environment for Real {
 }
 
 /// A custom environment.
-impl Environment for &HashMap<String, String> {
+impl<S: std::hash::BuildHasher> Environment for &HashMap<String, String, S> {
     fn var(&self, key: &str) -> Result<Option<String>, Error> {
         Ok(self.get(key).map(|s| s.to_string()))
     }

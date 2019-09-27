@@ -3,11 +3,10 @@ use crate::{
     system::{System, SystemInput, SystemUnit, Translation},
 };
 use failure::{bail, Error};
-use serde_derive::Deserialize;
 use std::fmt;
 
-/// Conditionally run only for the given operating system.
 system_struct! {
+    #[doc = "Conditionally run only for the given operating system."]
     OnlyFor {
         #[doc="Which OS to run the given systems for."]
         pub os: Option<String>,
@@ -18,8 +17,11 @@ system_struct! {
 impl OnlyFor {
     pub fn translate(&self) -> Translation<'_> {
         if let Some(os) = self.os.as_ref() {
-            if os != std::env::consts::OS {
-                return Translation::Discard;
+            match (os.as_str(), std::env::consts::OS) {
+                (current, actual) if current == actual => (),
+                ("unix", "linux") => (),
+                ("unix", "macos") => (),
+                _ => return Translation::Discard,
             }
         }
 
