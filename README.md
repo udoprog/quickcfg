@@ -75,14 +75,26 @@ Create a repository with a `quickcfg.yml` in its root:
 git_refresh: 1d
 
 hierarchy:
-  - secrets.yaml
-  - db/common.yaml
-  - db/{distro}.yaml
+  - secrets.yml
+  - db/common.yml
+  - db/{distro}.yml
 
 systems:
   # System to ensure that a set of packages are installed.
   - type: install
 ```
+
+You also want to add a `.gitignore` file that looks like this:
+
+```gitignore
+/secrets.yml
+/.state.yml
+/.state
+```
+
+Then populate `secrets.yml` with your secret information - this you **DO NOT** check into git.
+Any variables you put in here can be used in future templates since they are part of the
+hierarchy.
 
 The [`hierarchy`] specifies a set of files that should be looked for.
 These can use variables like `{distro}`, which will be expanded based on the facts known of the
