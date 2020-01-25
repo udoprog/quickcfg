@@ -1,6 +1,6 @@
 //! Git abstraction.
 
-use failure::Error;
+use anyhow::Error;
 use std::fmt;
 use std::path::Path;
 

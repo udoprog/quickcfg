@@ -1,6 +1,6 @@
 //! Dealing with the hierarchy of data.
 use crate::{environment as e, facts::Facts, Template};
-use failure::{bail, format_err, Error};
+use anyhow::{bail, format_err, Error};
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 use std::env;

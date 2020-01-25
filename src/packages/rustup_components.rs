@@ -1,7 +1,7 @@
 //! Packages abstraction for rustup components.
 
 use crate::{packages::Package, rustup};
-use failure::Error;
+use anyhow::Error;
 
 /// Packages abstraction for rustup components.
 #[derive(Debug)]

@@ -11,8 +11,8 @@ use crate::{
     unit::{self, SystemUnit, UnitAllocator, UnitId},
     FileSystem,
 };
+use anyhow::Error;
 use directories::BaseDirs;
-use failure::Error;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -89,14 +89,14 @@ macro_rules! system_impl {
             where
                 E: Copy + $crate::environment::Environment,
             {
-                use failure::{ResultExt, format_err};
+                use anyhow::{Context as _, format_err};
                 use self::System::*;
 
                 let res = match *self {
                     $($name(ref system) => system.apply(input),)*
                 };
 
-                Ok(res.with_context(|_| format_err!("Failed to run system: {:?}", self))?)
+                Ok(res.with_context(|| format_err!("Failed to run system: {:?}", self))?)
             }
         }
 

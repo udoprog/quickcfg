@@ -4,13 +4,14 @@ use crate::{
     git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager, state::State,
     FileSystem,
 };
-use failure::{format_err, Error, Fail, ResultExt};
+use anyhow::{format_err, Context as _, Error};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dependency {
@@ -24,7 +25,7 @@ pub enum Dependency {
     Unit(UnitId),
 }
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub struct RenderError(PathBuf);
 
 impl fmt::Display for RenderError {
@@ -91,7 +92,7 @@ macro_rules! unit {
                     $($name(ref unit) => unit.apply(input),)*
                 };
 
-                Ok(res.with_context(|_| format_err!("Failed to run unit: {:?}", self))?)
+                Ok(res.with_context(|| format_err!("Failed to run unit: {:?}", self))?)
             }
         }
 
@@ -461,10 +462,10 @@ impl Download {
         let Download(ref url, ref path) = *self;
 
         let mut out = File::create(&path)
-            .with_context(|_| format_err!("Failed to open file: {}", path.display()))?;
+            .with_context(|| format_err!("Failed to open file: {}", path.display()))?;
 
-        let mut response = reqwest::get(url.clone())
-            .with_context(|_| format_err!("Failed to download URL: {}", url))?;
+        let mut response = reqwest::blocking::get(url.clone())
+            .with_context(|| format_err!("Failed to download URL: {}", url))?;
 
         response.copy_to(&mut out)?;
         Ok(())
@@ -639,7 +640,7 @@ impl RunOnce {
 
         let output = cmd
             .run(&command_args)
-            .with_context(|_| format_err!("Failed to run: {}", path.display()))?;
+            .with_context(|| format_err!("Failed to run: {}", path.display()))?;
 
         if !output.status.success() {
             return Err(Error::from(output.into_error()));

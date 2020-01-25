@@ -6,7 +6,7 @@ use crate::{
     opts::Opts,
     unit::{CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator},
 };
-use failure::{bail, format_err, Error, ResultExt};
+use anyhow::{bail, format_err, Context as _, Error};
 use fxhash::FxHashMap;
 use std::fs;
 use std::io;
@@ -368,7 +368,7 @@ impl<'a> FileSystem<'a> {
         let modified = accessed;
 
         filetime::set_file_times(path, accessed, modified)
-            .with_context(|_| format_err!("Failed to update timestamps for: {}", path.display()))?;
+            .with_context(|| format_err!("Failed to update timestamps for: {}", path.display()))?;
         Ok(())
     }
 

@@ -1,7 +1,7 @@
 //! Packages abstraction for rustup toolchains.
 
 use crate::{packages::Package, rustup};
-use failure::Error;
+use anyhow::Error;
 
 /// Packages abstraction for rustup toolchains.
 #[derive(Debug)]

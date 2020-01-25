@@ -1,7 +1,7 @@
 use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
-use failure::Error;
+use anyhow::Error;
 use std::fmt;
 
 system_struct! {

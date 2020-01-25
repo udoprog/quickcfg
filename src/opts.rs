@@ -1,8 +1,8 @@
 //! Set up options.
 
+use anyhow::{bail, Error};
 use clap::{App, Arg};
 use directories::BaseDirs;
-use failure::{bail, Error};
 use std::path::PathBuf;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

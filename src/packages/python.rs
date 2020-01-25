@@ -1,7 +1,7 @@
 //! Packages abstraction for pip/pip3.
 
 use crate::{command, os, packages::Package};
-use failure::{format_err, Error};
+use anyhow::{format_err, Error};
 use std::ffi::OsStr;
 use std::io;
 
@@ -34,7 +34,7 @@ impl Pip {
     pub fn list_installed(&self) -> Result<Vec<Package>, Error> {
         let mut out = Vec::new();
 
-        let args = &["list", "--format=legacy"];
+        let args = &["list", "--format=columns"];
 
         for line in self.command.run_lines(args)? {
             let line = line.trim();

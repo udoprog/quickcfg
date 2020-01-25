@@ -1,7 +1,7 @@
 //! Unix-specific implementations.
 
 use crate::unit::{AddMode, Symlink};
-use failure::{format_err, Error, ResultExt};
+use anyhow::{format_err, Context as _, Error};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
@@ -33,7 +33,7 @@ pub fn add_mode(add_mode: &AddMode) -> Result<(), Error> {
     perm.set_mode(mode);
 
     fs::set_permissions(&add_mode.path, perm)
-        .with_context(|_| format_err!("failed to add mode: {}", add_mode.path.display()))?;
+        .with_context(|| format_err!("failed to add mode: {}", add_mode.path.display()))?;
 
     Ok(())
 }

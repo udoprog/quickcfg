@@ -1,7 +1,7 @@
 use crate::{
     environment as e, system::SystemInput, template::Template, unit::SystemUnit, FileSystem,
 };
-use failure::{bail, Error};
+use anyhow::{bail, Error};
 use std::fmt;
 use std::fs;
 

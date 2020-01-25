@@ -1,12 +1,13 @@
 //! Helper to run external commands.
 
-use failure::{bail, Error, Fail};
+use anyhow::{bail, Error};
 use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
+use thiserror::Error;
 
 /// The decoded output after running a command.
 pub struct Output {
@@ -26,7 +27,7 @@ impl Output {
     }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub struct OutputError {
     pub status: process::ExitStatus,
     pub stdout: String,

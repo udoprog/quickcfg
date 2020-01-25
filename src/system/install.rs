@@ -3,7 +3,7 @@ use crate::{
     system::SystemInput,
     unit::{self, SystemUnit},
 };
-use failure::{format_err, Error};
+use anyhow::{format_err, Error};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 

@@ -1,5 +1,5 @@
 use crate::{command, os};
-use failure::Error;
+use anyhow::Error;
 use std::io;
 use std::path::{Path, PathBuf};
 

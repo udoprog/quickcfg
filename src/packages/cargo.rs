@@ -1,7 +1,7 @@
 //! Packages abstraction for Cargo.
 
 use crate::{command, os, packages::Package};
-use failure::{format_err, Error};
+use anyhow::{format_err, Error};
 use std::ffi::OsStr;
 use std::io;
 

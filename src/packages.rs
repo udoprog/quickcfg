@@ -10,7 +10,7 @@ mod rustup_components;
 mod rustup_toolchains;
 
 use crate::facts::{self, Facts};
-use failure::{bail, Error};
+use anyhow::{bail, Error};
 use log::warn;
 use std::fmt;
 use std::sync::Arc;

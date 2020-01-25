@@ -1,7 +1,7 @@
 //! Model for template variables.
 use crate::environment::Environment;
+use anyhow::{bail, format_err, Error};
 use directories::BaseDirs;
-use failure::{bail, format_err, Error};
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
 use std::fmt;

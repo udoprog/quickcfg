@@ -1,7 +1,7 @@
 //! Windows-specific implementations.
 
 use crate::unit::{AddMode, Symlink};
-use failure::{bail, Error};
+use anyhow::{bail, Error};
 use std::borrow::Cow;
 use std::env::consts;
 use std::path::{Path, PathBuf};

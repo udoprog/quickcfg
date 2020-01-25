@@ -1,7 +1,7 @@
 //! Model for state file.
 
 use crate::config::Config;
-use failure::Error;
+use anyhow::Error;
 use fxhash::FxHasher64;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

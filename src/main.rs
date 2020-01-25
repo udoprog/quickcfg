@@ -1,5 +1,5 @@
+use anyhow::{bail, format_err, Context as _, Error};
 use directories::BaseDirs;
-use failure::{bail, format_err, Error, ResultExt};
 use log;
 use quickcfg::{
     environment as e,
@@ -17,21 +17,27 @@ use std::path::Path;
 use std::time::SystemTime;
 
 fn report_error(e: Error) {
-    let mut it = e.iter_chain();
+    let mut it = e.chain();
 
     if let Some(e) = it.next() {
         eprintln!("Error: {}", e);
 
-        if let Some(bt) = e.backtrace() {
-            eprintln!("{}", bt);
+        #[cfg(feature = "nightly")]
+        {
+            if let Some(bt) = e.backtrace() {
+                eprintln!("{}", bt);
+            }
         }
     }
 
     for e in it {
         eprintln!("Caused by: {}", e);
 
-        if let Some(bt) = e.backtrace() {
-            eprintln!("{}", bt);
+        #[cfg(feature = "nightly")]
+        {
+            if let Some(bt) = e.backtrace() {
+                eprintln!("{}", bt);
+            }
         }
     }
 }
@@ -46,8 +52,8 @@ fn main() {
 }
 
 fn try_main() -> Result<(), Error> {
-    pretty_env_logger::formatted_builder()?
-        .parse("trace")
+    pretty_env_logger::formatted_builder()
+        .parse_filters("trace")
         .init();
 
     let base_dirs = BaseDirs::new();
@@ -84,7 +90,7 @@ fn try_main() -> Result<(), Error> {
         opts.init = opts.input("[Git Repository]")?;
     }
 
-    let git_system = git::setup().with_context(|_| "failed to set up git system")?;
+    let git_system = git::setup().with_context(|| "failed to set up git system")?;
 
     if let Some(init) = opts.init.as_ref() {
         log::info!("Initializing {} from {}", root.display(), init);
@@ -98,13 +104,13 @@ fn try_main() -> Result<(), Error> {
     }
 
     if !state_dir.is_dir() {
-        fs::create_dir(&state_dir).with_context(|_| {
+        fs::create_dir(&state_dir).with_context(|| {
             format_err!("Failed to create state directory: {}", state_dir.display())
         })?;
     }
 
     let config = Config::load(&config_path)
-        .with_context(|_| format_err!("Failed to load configuration: {}", config_path.display()))?
+        .with_context(|| format_err!("Failed to load configuration: {}", config_path.display()))?
         .unwrap_or_default();
     let now = SystemTime::now();
 
@@ -153,7 +159,7 @@ fn try_apply_config<'a>(
 
     let pool = rayon::ThreadPoolBuilder::new()
         .build()
-        .with_context(|_| format_err!("Failed to construct thread pool"))?;
+        .with_context(|| format_err!("Failed to construct thread pool"))?;
 
     if !try_update_config(git_system, opts, config, now, root, &mut state)? {
         // if we only want to run on updates, exit now.
@@ -166,10 +172,10 @@ fn try_apply_config<'a>(
         log::info!("Updated found, running...");
     }
 
-    let facts = Facts::load().with_context(|_| "Failed to load facts")?;
+    let facts = Facts::load().with_context(|| "Failed to load facts")?;
     let environment = e::Real;
     let data = hierarchy::load(&config.hierarchy, root, &facts, environment)
-        .with_context(|_| "Failed to load hierarchy")?;
+        .with_context(|| "Failed to load hierarchy")?;
 
     let packages = packages::detect(&facts)?;
 

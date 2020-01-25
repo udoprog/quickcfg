@@ -1,7 +1,7 @@
 //! Loading facts about the system that we are currently running on.
 
 use crate::template::Vars;
-use failure::{bail, Error};
+use anyhow::{bail, Error};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
