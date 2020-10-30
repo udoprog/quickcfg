@@ -1,8 +1,7 @@
 //! Helper to run external commands.
 
 use anyhow::{bail, Error};
-use std::borrow::Cow;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -54,26 +53,43 @@ impl fmt::Display for OutputError {
 
 /// A command wrapper that simplifies interaction with external commands.
 #[derive(Debug, Clone)]
-pub struct Command<'name> {
-    name: Cow<'name, Path>,
-    working_directory: Option<PathBuf>,
+pub struct Command {
+    pub(crate) name: PathBuf,
+    pub(crate) working_directory: Option<PathBuf>,
+    pub(crate) args: Vec<OsString>,
 }
 
-impl<'name> Command<'name> {
+impl Command {
     /// Construct a new command wrapper.
-    pub fn new(name: Cow<'name, Path>) -> Command<'name> {
+    pub fn new(name: impl Into<PathBuf>) -> Command {
         Command {
-            name,
+            name: name.into(),
             working_directory: None,
+            args: Vec::new(),
         }
     }
 
-    fn command<S>(&self, args: impl IntoIterator<Item = S>) -> process::Command
+    /// Push an argument to the command.
+    pub fn arg<A>(&mut self, arg: A)
     where
-        S: AsRef<OsStr>,
+        A: AsRef<OsStr>,
     {
+        self.args.push(arg.as_ref().to_owned());
+    }
+
+    /// Push a collection of arguments to the command.
+    pub fn args<I>(&mut self, args: I)
+    where
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
+    {
+        self.args
+            .extend(args.into_iter().map(|arg| arg.as_ref().to_owned()));
+    }
+
+    fn command(&self) -> process::Command {
         let mut cmd = process::Command::new(self.name.as_os_str());
-        cmd.args(args);
+        cmd.args(&self.args);
 
         if let Some(working_directory) = self.working_directory.as_ref() {
             cmd.current_dir(working_directory);
@@ -83,20 +99,14 @@ impl<'name> Command<'name> {
     }
 
     /// Configure the working directory of this command.
-    pub fn working_directory<'p>(self, path: impl Into<&'p Path>) -> Self {
-        Command {
-            name: self.name,
-            working_directory: Some(path.into().to_owned()),
-        }
+    pub fn working_directory(&mut self, path: impl AsRef<Path>) {
+        self.working_directory = Some(path.as_ref().to_owned());
     }
 
     /// Run the given command, return all lines printed to stdout on success.
-    pub fn run_lines<S>(&self, args: impl IntoIterator<Item = S>) -> Result<Vec<String>, Error>
-    where
-        S: AsRef<OsStr>,
-    {
+    pub fn run_lines(self) -> Result<Vec<String>, Error> {
         let lines = self
-            .run_stdout(args)?
+            .run_stdout()?
             .split('\n')
             .map(|s| s.to_string())
             .collect();
@@ -105,11 +115,8 @@ impl<'name> Command<'name> {
     }
 
     /// Run the given command, return a string of all output.
-    pub fn run_stdout<S>(&self, args: impl IntoIterator<Item = S>) -> Result<String, Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let output = self.run(args)?;
+    pub fn run_stdout(self) -> Result<String, Error> {
+        let output = self.run()?;
 
         if !output.status.success() {
             return Err(Error::from(output.into_error()));
@@ -119,11 +126,8 @@ impl<'name> Command<'name> {
     }
 
     /// Run the given command, only checking for status code and providing diagnostics.
-    pub fn run_checked<S>(&self, args: impl IntoIterator<Item = S>) -> Result<(), Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let output = self.run(args)?;
+    pub fn run_checked(self) -> Result<(), Error> {
+        let output = self.run()?;
 
         if !output.status.success() {
             return Err(Error::from(output.into_error()));
@@ -136,11 +140,8 @@ impl<'name> Command<'name> {
     ///
     /// This is discouraged, since it basically requires the command to be running on the main
     /// thread.
-    pub fn run_inherited<S>(&self, args: impl IntoIterator<Item = S>) -> Result<(), Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let mut cmd = self.command(args);
+    pub fn run_inherited(&self) -> Result<(), Error> {
+        let mut cmd = self.command();
         let status = cmd.status()?;
 
         if !status.success() {
@@ -155,11 +156,8 @@ impl<'name> Command<'name> {
     }
 
     /// Run the given command, return a string of all output.
-    pub fn run<S>(&self, args: impl IntoIterator<Item = S>) -> Result<Output, io::Error>
-    where
-        S: AsRef<OsStr>,
-    {
-        let output = self.command(args).output()?;
+    pub fn run(self) -> io::Result<Output> {
+        let output = self.command().output()?;
 
         let output = Output {
             status: output.status,
@@ -172,5 +170,16 @@ impl<'name> Command<'name> {
         };
 
         Ok(output)
+    }
+
+    /// Run the command and wait for exit status.
+    pub fn status(self) -> io::Result<process::ExitStatus> {
+        Ok(self.command().status()?)
+    }
+
+    /// Run as administrator.
+    #[cfg(windows)]
+    pub fn runas(self) -> io::Result<i32> {
+        Ok(crate::ffi::win::shellapi::runas(self)?)
     }
 }

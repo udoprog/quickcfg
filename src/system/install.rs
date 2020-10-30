@@ -41,7 +41,7 @@ impl Install {
 
         let mut units = Vec::new();
 
-        let provider = self.provider.as_ref();
+        let provider = self.provider.as_deref();
 
         let package_manager = match provider {
             Some(provider) => packages.get(provider)?,
@@ -50,15 +50,15 @@ impl Install {
 
         let id = self
             .id
-            .as_ref()
+            .as_deref()
             .map(|id| id.to_string())
             .or_else(|| provider.map(|id| id.to_string()))
             .or_else(|| packages.default().map(|p| p.name().to_string()))
-            .ok_or_else(|| anyhow!("no usable package `id`"))?;
+            .ok_or_else(|| anyhow!("no usable install provider id"))?;
 
         let mut all_packages = BTreeSet::new();
 
-        let key = match package_manager.as_ref().and_then(|p| p.key()) {
+        let key = match package_manager.as_deref().and_then(|p| p.key()) {
             Some(key) => key.to_string(),
             None => match provider {
                 Some(provider) => format!("{}::{}", provider, self.key),

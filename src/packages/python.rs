@@ -7,7 +7,7 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Pip {
-    command: command::Command<'static>,
+    command: command::Command,
 }
 
 impl Pip {
@@ -20,7 +20,10 @@ impl Pip {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.command.run(&["--version"]) {
+        let mut command = self.command.clone();
+        command.arg("--version");
+
+        match command.run() {
             Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
@@ -34,9 +37,10 @@ impl Pip {
     pub fn list_installed(&self) -> Result<Vec<Package>, Error> {
         let mut out = Vec::new();
 
-        let args = &["list", "--format=columns"];
+        let mut command = self.command.clone();
+        command.args(&["list", "--format=columns"]);
 
-        for line in self.command.run_lines(args)? {
+        for line in command.run_lines()? {
             let line = line.trim();
 
             if line == "" {
@@ -55,18 +59,16 @@ impl Pip {
     }
 
     /// List all the packages which are installed.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
+    pub fn install_packages<I>(&self, packages: I) -> Result<(), Error>
     where
-        S: AsRef<OsStr>,
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
     {
-        let packages = packages.into_iter().collect::<Vec<_>>();
-
-        let mut args = Vec::new();
-        args.push(OsStr::new("install"));
-        args.push(OsStr::new("--user"));
-        args.extend(packages.iter().map(AsRef::as_ref));
-
-        self.command.run(args)?;
+        let mut command = self.command.clone();
+        command.arg("install");
+        command.arg("--user");
+        command.args(packages);
+        command.run()?;
         Ok(())
     }
 }

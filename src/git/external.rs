@@ -4,7 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 pub struct GitSystem {
-    command: command::Command<'static>,
+    command: command::Command,
 }
 
 impl GitSystem {
@@ -17,7 +17,10 @@ impl GitSystem {
 
 impl super::GitSystem for GitSystem {
     fn test(&self) -> Result<bool, Error> {
-        match self.command.run(&["--version"]) {
+        let mut command = self.command.clone();
+        command.arg("--version");
+
+        match command.run() {
             Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 io::ErrorKind::NotFound => Ok(false),
@@ -27,10 +30,11 @@ impl super::GitSystem for GitSystem {
     }
 
     fn clone(&self, url: &str, path: &Path) -> Result<Box<dyn super::Git>, Error> {
-        use std::ffi::OsStr;
-
-        let args = &[OsStr::new("clone"), OsStr::new(url), path.as_os_str()];
-        self.command.run_checked(args)?;
+        let mut command = self.command.clone();
+        command.arg("clone");
+        command.arg(url);
+        command.arg(path);
+        command.run_checked()?;
 
         Ok(Box::new(External {
             path: path.to_owned(),
@@ -50,29 +54,23 @@ impl super::GitSystem for GitSystem {
 #[derive(Debug)]
 struct External {
     pub path: PathBuf,
-    command: command::Command<'static>,
+    command: command::Command,
 }
 
 impl External {
     fn rev_parse(&self, git_ref: &str) -> Result<String, Error> {
-        Ok(self
-            .command
-            .clone()
-            .working_directory(self.path.as_path())
-            .run_stdout(&["rev-parse", git_ref])?
-            .trim()
-            .to_string())
+        let mut command = self.command.clone();
+        command.working_directory(&self.path);
+        command.args(&["rev-parse", git_ref]);
+        Ok(command.run_stdout()?.trim().to_string())
     }
 
     /// Find the merge base between two commits.
     fn merge_base(&self, a: &str, b: &str) -> Result<String, Error> {
-        Ok(self
-            .command
-            .clone()
-            .working_directory(self.path.as_path())
-            .run_stdout(&["merge-base", a, b])?
-            .trim()
-            .to_string())
+        let mut command = self.command.clone();
+        command.working_directory(&self.path);
+        command.args(&["merge-base", a, b]);
+        Ok(command.run_stdout()?.trim().to_string())
     }
 }
 
@@ -82,10 +80,10 @@ impl super::Git for External {
     }
 
     fn needs_update(&self) -> Result<bool, Error> {
-        self.command
-            .clone()
-            .working_directory(self.path())
-            .run_checked(&["fetch", "origin", "master"])?;
+        let mut command = self.command.clone();
+        command.working_directory(self.path());
+        command.args(&["fetch", "origin", "master"]);
+        command.run_checked()?;
 
         let remote_head = self.rev_parse("FETCH_HEAD")?;
         let head = self.rev_parse("HEAD")?;
@@ -99,26 +97,23 @@ impl super::Git for External {
     }
 
     fn is_fresh(&self) -> Result<bool, Error> {
-        let output = self
-            .command
-            .clone()
-            .working_directory(self.path.as_path())
-            .run(&["diff-index", "--quiet", "HEAD"])?;
-
-        Ok(output.status.success())
+        let mut command = self.command.clone();
+        command.working_directory(&self.path);
+        command.args(&["diff-index", "--quiet", "HEAD"]);
+        Ok(command.status()?.success())
     }
 
     fn force_update(&self) -> Result<(), Error> {
-        self.command
-            .clone()
-            .working_directory(self.path.as_path())
-            .run_checked(&["reset", "--hard", "FETCH_HEAD"])
+        let mut command = self.command.clone();
+        command.working_directory(&self.path);
+        command.args(&["reset", "--hard", "FETCH_HEAD"]);
+        command.run_checked()
     }
 
     fn update(&self) -> Result<(), Error> {
-        self.command
-            .clone()
-            .working_directory(self.path.as_path())
-            .run_checked(&["merge", "--ff-only", "FETCH_HEAD"])
+        let mut command = self.command.clone();
+        command.working_directory(&self.path);
+        command.args(&["merge", "--ff-only", "FETCH_HEAD"]);
+        command.run_checked()
     }
 }

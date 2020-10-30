@@ -7,7 +7,7 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Rustup {
-    rustup: command::Command<'static>,
+    rustup: command::Command,
     sub_command: &'static str,
     install: &'static str,
 }
@@ -24,7 +24,10 @@ impl Rustup {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.rustup.run(&["--version"]) {
+        let mut rustup = self.rustup.clone();
+        rustup.arg("--version");
+
+        match rustup.run() {
             Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
@@ -35,18 +38,18 @@ impl Rustup {
     }
 
     /// List all the packages which are installed.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
+    pub fn install_packages<I>(&self, packages: I) -> Result<(), Error>
     where
-        S: AsRef<OsStr>,
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
     {
         let packages = packages.into_iter().collect::<Vec<_>>();
 
-        let mut args = Vec::new();
-        args.push(OsStr::new(self.sub_command));
-        args.push(OsStr::new(self.install));
-        args.extend(packages.iter().map(AsRef::as_ref));
-
-        self.rustup.run(args)?;
+        let mut rustup = self.rustup.clone();
+        rustup.arg(self.sub_command);
+        rustup.arg(self.install);
+        rustup.args(packages);
+        rustup.run()?;
         Ok(())
     }
 
@@ -56,7 +59,11 @@ impl Rustup {
 
         let mut out = Vec::new();
 
-        for line in self.rustup.run_lines(&[self.sub_command, "list"])? {
+        let mut rustup = self.rustup.clone();
+        rustup.arg(self.sub_command);
+        rustup.arg("list");
+
+        for line in rustup.run_lines()? {
             if line.starts_with(char::is_whitespace) {
                 continue;
             }

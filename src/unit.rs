@@ -110,6 +110,7 @@ macro_rules! unit {
 }
 
 unit![
+    FromDb,
     CopyFile,
     CopyTemplate,
     Symlink,
@@ -163,6 +164,35 @@ impl SystemUnit {
     /// Apply the unit of work.
     pub fn apply(&self, input: UnitInput) -> Result<(), Error> {
         self.unit.apply(input)
+    }
+}
+
+/// The configuration for a unit to copy a single file.
+#[derive(Debug, Hash)]
+pub struct FromDb {
+    pub(crate) system: String,
+    pub(crate) key: String,
+}
+
+impl fmt::Display for FromDb {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "unit `{}` from database key `{}`",
+            self.system, self.key
+        )
+    }
+}
+
+impl FromDb {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl From<FromDb> for Unit {
+    fn from(value: FromDb) -> Unit {
+        Unit::FromDb(value)
     }
 }
 
@@ -585,6 +615,8 @@ pub struct RunOnce {
     pub path: PathBuf,
     /// Run using a shell.
     pub shell: bool,
+    /// Run as root or super user.
+    pub root: bool,
     /// Arguments to add when running the command.
     pub args: Vec<String>,
 }
@@ -596,14 +628,13 @@ impl fmt::Display for RunOnce {
 }
 
 impl RunOnce {
-    const BIN_SH: &'static str = "/bin/sh";
-
     /// Construct a new RunOnce.
     pub fn new(id: String, path: PathBuf) -> RunOnce {
         RunOnce {
             id,
             path,
             shell: false,
+            root: false,
             args: Vec::new(),
         }
     }
@@ -611,8 +642,7 @@ impl RunOnce {
     /// Apply the unit.
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use crate::command::Command;
-        use std::borrow::Cow;
-        use std::ffi::OsStr;
+        use std::io;
 
         let UnitInput { state, .. } = input;
 
@@ -620,34 +650,85 @@ impl RunOnce {
             ref id,
             ref path,
             shell,
+            root,
             ref args,
         } = *self;
 
-        log::info!("running {}", path.display());
-
-        let mut command_args = Vec::new();
-
-        let cmd = if shell {
-            command_args.push(path.as_os_str());
-            Command::new(Cow::from(Path::new(Self::BIN_SH)))
+        if self.args.is_empty() {
+            log::info!("running: {}", path.display());
         } else {
-            Command::new(Cow::from(path))
-        };
-
-        for arg in args {
-            command_args.push(OsStr::new(arg.as_str()));
+            log::info!("running: {} {}", path.display(), self.args.join(" "));
         }
 
-        let output = cmd
-            .run(&command_args)
-            .with_context(|| anyhow!("Failed to run: {}", path.display()))?;
+        let status = run_command(path, root, shell, args)
+            .with_context(|| anyhow!("failed to run: {}", path.display()))?;
 
-        if !output.status.success() {
-            return Err(Error::from(output.into_error()));
+        if status != 0 {
+            return Err(anyhow!(
+                "failed to run `{}`: status={}",
+                path.display(),
+                status
+            ));
         }
 
         state.touch_once(&id);
-        Ok(())
+        return Ok(());
+
+        #[cfg(windows)]
+        fn run_command(
+            path: &Path,
+            root: bool,
+            _shell: bool,
+            args: &Vec<String>,
+        ) -> io::Result<i32> {
+            let mut cmd = Command::new(path);
+            cmd.args(args);
+
+            Ok(if root {
+                cmd.runas()?
+            } else {
+                let status = cmd.status()?;
+                status
+                    .code()
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no status code"))?
+            })
+        }
+
+        #[cfg(not(windows))]
+        fn run_command(
+            path: &Path,
+            root: bool,
+            shell: bool,
+            args: &Vec<String>,
+        ) -> io::Result<i32> {
+            let mut cmd = if root {
+                let mut cmd = Command::new("sudo");
+                cmd.args(&["-p", "[sudo] password for %u to run downloaded exe: ", "--"]);
+
+                if shell {
+                    cmd.arg("/bin/sh");
+                    cmd.arg("--");
+                    cmd.arg(path);
+                } else {
+                    cmd.arg(path);
+                }
+
+                cmd
+            } else if shell {
+                let mut cmd = Command::new("/bin/sh");
+                cmd.arg(path);
+                cmd
+            } else {
+                Command::new(path)
+            };
+
+            cmd.args(args);
+            let status = cmd.status()?;
+            let code = status
+                .code()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no status code"))?;
+            Ok(code)
+        }
     }
 }
 

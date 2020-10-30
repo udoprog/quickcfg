@@ -7,8 +7,8 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Apt {
-    sudo: command::Command<'static>,
-    apt: command::Command<'static>,
+    sudo: command::Command,
+    apt: command::Command,
 }
 
 impl Apt {
@@ -22,7 +22,10 @@ impl Apt {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.apt.run(&["--version"]) {
+        let mut apt = self.apt.clone();
+        apt.arg("--version");
+
+        match apt.run() {
             Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
@@ -33,29 +36,23 @@ impl Apt {
     }
 
     /// List all the packages which are installed.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
+    pub fn install_packages<I>(&self, packages: I) -> Result<(), Error>
     where
-        S: AsRef<OsStr>,
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
     {
-        let packages = packages.into_iter().collect::<Vec<_>>();
-
-        let mut args = Vec::new();
-        args.push(OsStr::new("-p"));
-        args.push(OsStr::new("[sudo] password for %u to install packages: "));
-        args.push(OsStr::new("--"));
-        args.push(OsStr::new("apt"));
-        args.push(OsStr::new("install"));
-        args.push(OsStr::new("-y"));
-        args.extend(packages.iter().map(AsRef::as_ref));
-
-        self.sudo.run_inherited(args)?;
+        let mut sudo = self.sudo.clone();
+        sudo.args(&["-p", "[sudo] password for %u to install packages: ", "--"]);
+        sudo.args(&["apt", "install", "-y"]);
+        sudo.args(packages);
+        sudo.run_inherited()?;
         Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct DpkgQuery {
-    dpkg_query: command::Command<'static>,
+    dpkg_query: command::Command,
 }
 
 impl DpkgQuery {
@@ -70,9 +67,10 @@ impl DpkgQuery {
     pub fn list_installed(&self) -> Result<Vec<Package>, Error> {
         let mut out = Vec::new();
 
-        let args = &["-W", "--showformat=${db:Status-Abbrev}${binary:Package}\\n"];
+        let mut dpkg_query = self.dpkg_query.clone();
+        dpkg_query.args(&["-W", "--showformat=${db:Status-Abbrev}${binary:Package}\\n"]);
 
-        for line in self.dpkg_query.run_lines(args)? {
+        for line in dpkg_query.run_lines()? {
             let line = line.trim();
 
             if line == "" {

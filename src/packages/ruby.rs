@@ -7,7 +7,7 @@ use std::io;
 
 #[derive(Debug)]
 pub struct Gem {
-    gem: command::Command<'static>,
+    gem: command::Command,
 }
 
 impl Gem {
@@ -20,7 +20,10 @@ impl Gem {
 
     /// Test that the command is available.
     pub fn test(&self) -> Result<bool, Error> {
-        match self.gem.run(&["--version"]) {
+        let mut gem = self.gem.clone();
+        gem.arg("--version");
+
+        match gem.run() {
             Ok(output) => Ok(output.status.success()),
             Err(e) => match e.kind() {
                 // no such command.
@@ -31,26 +34,26 @@ impl Gem {
     }
 
     /// List all the packages which are installed.
-    pub fn install_packages<S>(&self, packages: impl IntoIterator<Item = S>) -> Result<(), Error>
+    pub fn install_packages<I>(&self, packages: I) -> Result<(), Error>
     where
-        S: AsRef<OsStr>,
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
     {
-        let packages = packages.into_iter().collect::<Vec<_>>();
-
-        let mut args = Vec::new();
-        args.push(OsStr::new("install"));
-        args.push(OsStr::new("--user-install"));
-        args.extend(packages.iter().map(AsRef::as_ref));
-
-        self.gem.run(args)?;
+        let mut gem = self.gem.clone();
+        gem.arg("install");
+        gem.arg("--user-install");
+        gem.args(packages);
+        gem.run()?;
         Ok(())
     }
 
     /// List all the packages which are installed.
     pub fn list_installed(&self) -> Result<Vec<Package>, Error> {
         let mut out = Vec::new();
+        let mut gem = self.gem.clone();
+        gem.args(&["list", "-q", "-l"]);
 
-        for line in self.gem.run_lines(&["list", "-q", "-l"])? {
+        for line in gem.run_lines()? {
             let line = line.trim();
 
             if line == "" {

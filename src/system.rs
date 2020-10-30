@@ -23,6 +23,7 @@ use std::time::SystemTime;
 mod macros;
 mod copy_dir;
 mod download_and_run;
+mod from_db;
 mod git_sync;
 mod install;
 mod link;
@@ -31,6 +32,7 @@ mod only_for;
 
 use self::copy_dir::CopyDir;
 use self::download_and_run::DownloadAndRun;
+use self::from_db::FromDb;
 use self::git_sync::GitSync;
 use self::install::Install;
 use self::link::Link;
@@ -54,13 +56,7 @@ macro_rules! system_impl {
                 use self::System::*;
 
                 match self {
-                    $(
-                    $name(ref system) => match system.translate() {
-                        Translation::Keep => Translation::Keep,
-                        Translation::Discard => Translation::Discard,
-                        Translation::Expand(expanded) => Translation::Expand(expanded),
-                    },
-                    )*
+                    $($name(system) => system.translate(),)*
                 }
             }
 
@@ -68,8 +64,8 @@ macro_rules! system_impl {
             pub fn id(&self) -> Option<&str> {
                 use self::System::*;
 
-                match *self {
-                    $($name(ref system) => system.id(),)*
+                match self {
+                    $($name(system) => system.id(),)*
                 }
             }
 
@@ -77,8 +73,8 @@ macro_rules! system_impl {
             pub fn requires(&self) -> &[String] {
                 use self::System::*;
 
-                match *self {
-                    $($name(ref system) => system.requires(),)*
+                match self {
+                    $($name(system) => system.requires(),)*
                 }
             }
 
@@ -92,8 +88,8 @@ macro_rules! system_impl {
                 use anyhow::{Context as _, anyhow};
                 use self::System::*;
 
-                let res = match *self {
-                    $($name(ref system) => system.apply(input),)*
+                let res = match self {
+                    $($name(system) => system.apply(input),)*
                 };
 
                 Ok(res.with_context(|| anyhow!("Failed to run system: {:?}", self))?)
@@ -135,6 +131,8 @@ pub enum System {
     GitSync(GitSync),
     #[serde(rename = "only-for")]
     OnlyFor(OnlyFor),
+    #[serde(rename = "from-db")]
+    FromDb(FromDb),
 }
 
 system_impl![
@@ -145,9 +143,11 @@ system_impl![
     Link,
     GitSync,
     OnlyFor,
+    FromDb,
 ];
 
 /// All inputs for a system.
+#[derive(Clone, Copy)]
 pub struct SystemInput<'a, 'f, E>
 where
     E: e::Environment,

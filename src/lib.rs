@@ -2,6 +2,7 @@ mod command;
 mod config;
 pub mod environment;
 pub mod facts;
+pub mod ffi;
 mod file_operations;
 mod file_system;
 pub mod git;

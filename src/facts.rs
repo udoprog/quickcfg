@@ -4,13 +4,16 @@ use crate::template::Vars;
 use anyhow::{bail, Error};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::hash::Hash;
 use std::io;
 use std::path::Path;
 
+/// The `distro` fact key.
 pub const DISTRO: &str = "distro";
+
+/// The `os` fact key.
+pub const OS: &str = "os";
 
 /// The holder of all the facts detected in the system.
 pub struct Facts(HashMap<String, String>);
@@ -29,9 +32,11 @@ impl Facts {
             facts.insert(DISTRO.to_string(), distro);
         }
 
+        facts.insert(OS.to_string(), std::env::consts::OS.to_string());
         return Ok(Facts(facts));
 
         /// Detect which distro we appear to be running.
+        #[allow(unreachable_code)]
         fn detect_distro() -> Result<Option<String>, Error> {
             if metadata("/etc/redhat-release")?
                 .map(|m| m.is_file())
@@ -54,13 +59,6 @@ impl Facts {
                 return Ok(Some("debian".to_string()));
             }
 
-            if environ("OSTYPE")?
-                .map(|s| s.starts_with("darwin"))
-                .unwrap_or(false)
-            {
-                return Ok(Some("osx".to_string()));
-            }
-
             Ok(None)
         }
 
@@ -76,16 +74,6 @@ impl Facts {
             };
 
             Ok(Some(m))
-        }
-
-        fn environ(key: &str) -> Result<Option<String>, Error> {
-            let value = match env::var(key) {
-                Ok(value) => value,
-                Err(env::VarError::NotPresent) => return Ok(None),
-                Err(e) => bail!("failed to load environment var: {}: {}", key, e),
-            };
-
-            Ok(Some(value))
         }
     }
 

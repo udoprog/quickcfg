@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{AddMode, Dependency, Download, Mode, RunOnce, SystemUnit},
 };
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context as _, Error};
 use std::fmt;
 
 system_struct! {
@@ -24,6 +24,9 @@ system_struct! {
         #[doc="Rename the binary to this before running it."]
         #[serde(default)]
         pub name: Option<String>,
+        /// Run the downloaded command as root.
+        #[serde(default)]
+        pub root: bool,
     }
 }
 
@@ -44,17 +47,32 @@ impl DownloadAndRun {
             ..
         } = input;
 
-        let id = self.id.as_ref().ok_or_else(|| anyhow!("missing `id`"))?;
+        let url = reqwest::Url::parse(&self.url).with_context(|| anyhow!("illegal `url`"))?;
+        let base = url_base_name(&url);
 
-        if state.has_run_once(&id) {
+        let generated_id;
+
+        let id = match self.id.as_deref().or_else(|| self.name.as_deref()) {
+            Some(id) => id,
+            None => {
+                if let Some(base) = base {
+                    generated_id = format!("{id}-{base}", id = id_from_url(&self.url), base = base);
+                } else {
+                    generated_id = id_from_url(&self.url);
+                }
+
+                generated_id.as_str()
+            }
+        };
+
+        if state.has_run_once(id) {
             return Ok(vec![]);
         }
 
-        let url = reqwest::Url::parse(&self.url)?;
-
-        let name = match self.name.as_ref() {
-            Some(name) => name.as_str(),
-            None => &id,
+        let name = if let Some(name) = self.name.as_deref() {
+            name
+        } else {
+            id
         };
 
         let path = os::exe_path(file_system.state_path(name));
@@ -78,6 +96,7 @@ impl DownloadAndRun {
         // Run the downloaded file.
         let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
         run_once.shell = self.shell;
+        run_once.root = self.root;
 
         for (i, arg) in self.args.iter().enumerate() {
             let arg = arg
@@ -89,7 +108,7 @@ impl DownloadAndRun {
 
         let mut run = allocator.unit(run_once);
         run.dependencies.push(Dependency::Unit(add_mode.id));
-        run.thread_local = self.interactive;
+        run.thread_local = self.interactive || self.root;
 
         units.extend(download);
         units.push(add_mode);
@@ -103,4 +122,25 @@ impl fmt::Display for DownloadAndRun {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "download and run `{}`", self.url)
     }
+}
+
+/// Generate a unique ID from the URL provided.
+fn id_from_url(url: &str) -> String {
+    use std::hash::{Hash, Hasher};
+
+    let mut state = fxhash::FxHasher64::default();
+    url.hash(&mut state);
+
+    format!("{:x}", state.finish())
+}
+
+/// Extract a reasonable URL base name.
+fn url_base_name(url: &reqwest::Url) -> Option<&str> {
+    let base = url.path().rsplit('/').next()?;
+
+    if base.is_empty() {
+        return None;
+    }
+
+    Some(base)
 }

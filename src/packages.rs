@@ -8,6 +8,7 @@ mod python;
 mod ruby;
 mod rustup_components;
 mod rustup_toolchains;
+mod winget;
 
 use crate::facts::{self, Facts};
 use anyhow::{bail, Error};
@@ -16,6 +17,7 @@ use std::fmt;
 use std::sync::Arc;
 
 /// Information about an installed package.
+#[derive(Debug)]
 pub struct Package {
     pub name: String,
 }
@@ -45,6 +47,7 @@ impl Provider {
             "pip3" => test(python::PackageManager::new("pip3")),
             "gem" => test(ruby::PackageManager::new()),
             "cargo" => test(cargo::PackageManager::new()),
+            "winget" => test(winget::PackageManager::new()),
             "rust toolchains" => test(rustup_toolchains::PackageManager::new()),
             "rust components" => test(rustup_components::PackageManager::new()),
             _ => bail!("No package manager provider for `{}`", name),
@@ -54,7 +57,14 @@ impl Provider {
 
 /// Detect which package provider to use.
 pub fn detect(facts: &Facts) -> Result<Provider, Error> {
-    let default = by_distro(facts)?;
+    let default = if let Some(default) = by_distro(facts)? {
+        Some(default)
+    } else if let Some(default) = by_os(facts)? {
+        Some(default)
+    } else {
+        None
+    };
+
     Ok(Provider { default })
 }
 
@@ -70,6 +80,23 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
         "debian" => test(debian::PackageManager::new()),
         distro => {
             warn!("no package integration for distro: {}", distro);
+            Ok(None)
+        }
+    }
+}
+
+/// Detect package manager by OS.
+fn by_os(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
+    let os = match facts.get(facts::OS) {
+        // NB: unsupported os, good luck!
+        None => return Ok(None),
+        Some(os) => os,
+    };
+
+    match os {
+        "windows" => test(winget::PackageManager::new()),
+        os => {
+            warn!("no package integration for os: {}", os);
             Ok(None)
         }
     }
