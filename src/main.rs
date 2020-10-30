@@ -1,4 +1,4 @@
-use anyhow::{bail, format_err, Context as _, Error};
+use anyhow::{anyhow, bail, Context as _, Error};
 use directories::BaseDirs;
 use log;
 use quickcfg::{
@@ -105,12 +105,12 @@ fn try_main() -> Result<(), Error> {
 
     if !state_dir.is_dir() {
         fs::create_dir(&state_dir).with_context(|| {
-            format_err!("Failed to create state directory: {}", state_dir.display())
+            anyhow!("Failed to create state directory: {}", state_dir.display())
         })?;
     }
 
     let config = Config::load(&config_path)
-        .with_context(|| format_err!("Failed to load configuration: {}", config_path.display()))?
+        .with_context(|| anyhow!("Failed to load configuration: {}", config_path.display()))?
         .unwrap_or_default();
     let now = SystemTime::now();
 
@@ -159,7 +159,7 @@ fn try_apply_config<'a>(
 
     let pool = rayon::ThreadPoolBuilder::new()
         .build()
-        .with_context(|| format_err!("Failed to construct thread pool"))?;
+        .with_context(|| anyhow!("Failed to construct thread pool"))?;
 
     if !try_update_config(git_system, opts, config, now, root, &mut state)? {
         // if we only want to run on updates, exit now.

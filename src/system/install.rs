@@ -3,7 +3,7 @@ use crate::{
     system::SystemInput,
     unit::{self, SystemUnit},
 };
-use anyhow::{format_err, Error};
+use anyhow::{anyhow, Error};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
@@ -54,7 +54,7 @@ impl Install {
             .map(|id| id.to_string())
             .or_else(|| provider.map(|id| id.to_string()))
             .or_else(|| packages.default().map(|p| p.name().to_string()))
-            .ok_or_else(|| format_err!("no usable package `id`"))?;
+            .ok_or_else(|| anyhow!("no usable package `id`"))?;
 
         let mut all_packages = BTreeSet::new();
 

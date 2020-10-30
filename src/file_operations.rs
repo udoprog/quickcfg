@@ -1,6 +1,6 @@
 //! Utilities for reading and writing serde types to and from the filesystem.
 
-use anyhow::{bail, format_err, Context as _, Error};
+use anyhow::{anyhow, bail, Context as _, Error};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use serde_yaml;
@@ -32,7 +32,7 @@ where
         };
 
         let out: T =
-            serde_yaml::from_reader(f).with_context(|| format_err!("Failed to parse as YAML"))?;
+            serde_yaml::from_reader(f).with_context(|| anyhow!("Failed to parse as YAML"))?;
         Ok(Some(out))
     }
 }
@@ -42,8 +42,8 @@ where
     T: Serialize,
 {
     fn save(&self, path: &Path) -> Result<(), Error> {
-        let f = File::create(path).map_err(|e| format_err!("could not open file: {}", e))?;
-        serde_yaml::to_writer(f, self).map_err(|e| format_err!("failed to write: {}", e))?;
+        let f = File::create(path).map_err(|e| anyhow!("could not open file: {}", e))?;
+        serde_yaml::to_writer(f, self).map_err(|e| anyhow!("failed to write: {}", e))?;
         Ok(())
     }
 }

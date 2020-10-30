@@ -6,7 +6,7 @@ use crate::{
     opts::Opts,
     unit::{CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator},
 };
-use anyhow::{bail, format_err, Context as _, Error};
+use anyhow::{anyhow, bail, Context as _, Error};
 use fxhash::FxHashMap;
 use std::fs;
 use std::io;
@@ -33,10 +33,7 @@ pub struct FileSystem<'a> {
 
 macro_rules! dependency {
     ($name:ident, $slf:ident, $path:ident) => {{
-        let mut inner = $slf
-            .inner
-            .lock()
-            .map_err(|_| format_err!("Lock poisoned"))?;
+        let mut inner = $slf.inner.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         if let Some(dependency) = inner.paths.get_mut($path) {
             if let Dependency::$name(_) = *dependency {
@@ -74,10 +71,7 @@ impl<'a> FileSystem<'a> {
     /// Validate that we haven't created any conflicting files.
     /// Logs details and errors in case duplicates are registered.
     pub fn validate(self) -> Result<(), Error> {
-        let inner = self
-            .inner
-            .lock()
-            .map_err(|_| format_err!("Lock poisoned"))?;
+        let inner = self.inner.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         if !inner.invalid {
             return Ok(());
@@ -193,10 +187,7 @@ impl<'a> FileSystem<'a> {
 
     /// Recursively set up units with dependencies to create the given directories.
     pub fn create_dir_all(&self, dir: &Path) -> Result<Vec<SystemUnit>, Error> {
-        let mut inner = self
-            .inner
-            .lock()
-            .map_err(|_| format_err!("Lock poisoned"))?;
+        let mut inner = self.inner.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         let dirs = {
             // Directory is already being created.
@@ -368,7 +359,7 @@ impl<'a> FileSystem<'a> {
         let modified = accessed;
 
         filetime::set_file_times(path, accessed, modified)
-            .with_context(|| format_err!("Failed to update timestamps for: {}", path.display()))?;
+            .with_context(|| anyhow!("Failed to update timestamps for: {}", path.display()))?;
         Ok(())
     }
 

@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{AddMode, Dependency, Download, Mode, RunOnce, SystemUnit},
 };
-use anyhow::{format_err, Error};
+use anyhow::{anyhow, Error};
 use std::fmt;
 
 system_struct! {
@@ -44,10 +44,7 @@ impl DownloadAndRun {
             ..
         } = input;
 
-        let id = self
-            .id
-            .as_ref()
-            .ok_or_else(|| format_err!("missing `id`"))?;
+        let id = self.id.as_ref().ok_or_else(|| anyhow!("missing `id`"))?;
 
         if state.has_run_once(&id) {
             return Ok(vec![]);
@@ -85,7 +82,7 @@ impl DownloadAndRun {
         for (i, arg) in self.args.iter().enumerate() {
             let arg = arg
                 .as_string(facts, environment)?
-                .ok_or_else(|| format_err!("Cannot render argument #{}", i))?;
+                .ok_or_else(|| anyhow!("Cannot render argument #{}", i))?;
 
             run_once.args.push(arg);
         }

@@ -1,7 +1,7 @@
 //! Packages abstraction for rustup.
 
 use crate::{command, os, packages::Package};
-use anyhow::{format_err, Error};
+use anyhow::{anyhow, Error};
 use std::ffi::OsStr;
 use std::io;
 
@@ -69,9 +69,7 @@ impl Rustup {
 
             let mut it = line.split(' ');
 
-            let name = it
-                .next()
-                .ok_or_else(|| format_err!("expected package name"))?;
+            let name = it.next().ok_or_else(|| anyhow!("expected package name"))?;
 
             match it.next() {
                 Some("(default)") => {}

@@ -1,6 +1,6 @@
 //! Model for template variables.
 use crate::environment::Environment;
-use anyhow::{bail, format_err, Error};
+use anyhow::{anyhow, bail, Error};
 use directories::BaseDirs;
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
@@ -97,11 +97,11 @@ impl Template {
             input: &str,
             mut it: impl Iterator<Item = (usize, char)>,
         ) -> Result<(usize, &str), Error> {
-            let (start, _) = it.next().ok_or_else(|| format_err!("missing char"))?;
+            let (start, _) = it.next().ok_or_else(|| anyhow!("missing char"))?;
 
             while let Some((index, c)) = it.next() {
                 if c == '}' {
-                    let (end, _) = it.next().ok_or_else(|| format_err!("missing char"))?;
+                    let (end, _) = it.next().ok_or_else(|| anyhow!("missing char"))?;
                     return Ok((end, &input[start..index]));
                 }
             }
@@ -113,7 +113,7 @@ impl Template {
             input: &str,
             mut it: impl Iterator<Item = (usize, char)>,
         ) -> Result<(usize, &str), Error> {
-            let (start, _) = it.next().ok_or_else(|| format_err!("missing char"))?;
+            let (start, _) = it.next().ok_or_else(|| anyhow!("missing char"))?;
 
             for (index, c) in it {
                 match c {
@@ -158,7 +158,7 @@ impl Template {
         let protocol = |proto: &str| {
             let b = match proto {
                 "home" => base_dirs
-                    .ok_or_else(|| format_err!("Base dirs are required for home directory"))?
+                    .ok_or_else(|| anyhow!("Base dirs are required for home directory"))?
                     .home_dir(),
                 proto => {
                     bail!("Unsupported protocol `{}`", proto);

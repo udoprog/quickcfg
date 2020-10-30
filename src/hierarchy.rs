@@ -1,6 +1,6 @@
 //! Dealing with the hierarchy of data.
 use crate::{environment as e, facts::Facts, Template};
-use anyhow::{bail, format_err, Error};
+use anyhow::{anyhow, bail, Error};
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 use std::env;
@@ -110,7 +110,7 @@ impl Data {
                     }
                     None => self
                         .load::<Value>(key)?
-                        .ok_or_else(|| format_err!("missing key `{}` in hierarchy", key))?,
+                        .ok_or_else(|| anyhow!("missing key `{}` in hierarchy", key))?,
                     Some(other) => {
                         bail!("bad part in specification `{}`: bad type `{}`", part, other);
                     }
@@ -163,7 +163,7 @@ pub fn load<'a>(
         });
 
         let map = load_mapping(&path)
-            .map_err(|e| format_err!("failed to load: {}: {}", path.display(), e))?;
+            .map_err(|e| anyhow!("failed to load: {}: {}", path.display(), e))?;
 
         stages.push(map);
     }

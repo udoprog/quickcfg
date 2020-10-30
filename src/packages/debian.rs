@@ -1,7 +1,7 @@
 //! Packages abstraction for Debian.
 
 use crate::{command, os, packages::Package};
-use anyhow::{format_err, Error};
+use anyhow::{anyhow, Error};
 use std::ffi::OsStr;
 use std::io;
 
@@ -80,10 +80,8 @@ impl DpkgQuery {
             }
 
             let mut it = line.split(' ');
-            let status = it.next().ok_or_else(|| format_err!("expected status"))?;
-            let name = it
-                .next()
-                .ok_or_else(|| format_err!("expected package name"))?;
+            let status = it.next().ok_or_else(|| anyhow!("expected status"))?;
+            let name = it.next().ok_or_else(|| anyhow!("expected package name"))?;
 
             if status != "ii" {
                 continue;

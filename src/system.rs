@@ -89,14 +89,14 @@ macro_rules! system_impl {
             where
                 E: Copy + $crate::environment::Environment,
             {
-                use anyhow::{Context as _, format_err};
+                use anyhow::{Context as _, anyhow};
                 use self::System::*;
 
                 let res = match *self {
                     $($name(ref system) => system.apply(input),)*
                 };
 
-                Ok(res.with_context(|| format_err!("Failed to run system: {:?}", self))?)
+                Ok(res.with_context(|| anyhow!("Failed to run system: {:?}", self))?)
             }
         }
 

@@ -1,6 +1,6 @@
 //! Git integration using libgit2
 
-use anyhow::{bail, format_err, Error};
+use anyhow::{anyhow, bail, Error};
 use git2::{ObjectType, Oid, Repository, ResetType};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -49,7 +49,7 @@ impl Git2 {
             bail!("bad rev spec");
         }
 
-        let from = spec.from().ok_or_else(|| format_err!("missing `from`"))?;
+        let from = spec.from().ok_or_else(|| anyhow!("missing `from`"))?;
         Ok(from.id())
     }
 

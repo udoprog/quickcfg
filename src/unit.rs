@@ -4,7 +4,7 @@ use crate::{
     git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager, state::State,
     FileSystem,
 };
-use anyhow::{format_err, Context as _, Error};
+use anyhow::{anyhow, Context as _, Error};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -92,7 +92,7 @@ macro_rules! unit {
                     $($name(ref unit) => unit.apply(input),)*
                 };
 
-                Ok(res.with_context(|| format_err!("Failed to run unit: {:?}", self))?)
+                Ok(res.with_context(|| anyhow!("Failed to run unit: {:?}", self))?)
             }
         }
 
@@ -300,10 +300,10 @@ impl CopyTemplate {
         // * Reading the template file to determine which database variables to use.
 
         let content = fs::read_to_string(&from)
-            .map_err(|e| format_err!("failed to read path: {}: {}", from.display(), e))?;
+            .map_err(|e| anyhow!("failed to read path: {}: {}", from.display(), e))?;
 
         let data = data.load_from_spec(&content).map_err(|e| {
-            format_err!(
+            anyhow!(
                 "failed to load hierarchy for path: {}: {}",
                 from.display(),
                 e
@@ -462,10 +462,10 @@ impl Download {
         let Download(ref url, ref path) = *self;
 
         let mut out = File::create(&path)
-            .with_context(|| format_err!("Failed to open file: {}", path.display()))?;
+            .with_context(|| anyhow!("Failed to open file: {}", path.display()))?;
 
         let mut response = reqwest::blocking::get(url.clone())
-            .with_context(|| format_err!("Failed to download URL: {}", url))?;
+            .with_context(|| anyhow!("Failed to download URL: {}", url))?;
 
         response.copy_to(&mut out)?;
         Ok(())
@@ -640,7 +640,7 @@ impl RunOnce {
 
         let output = cmd
             .run(&command_args)
-            .with_context(|| format_err!("Failed to run: {}", path.display()))?;
+            .with_context(|| anyhow!("Failed to run: {}", path.display()))?;
 
         if !output.status.success() {
             return Err(Error::from(output.into_error()));

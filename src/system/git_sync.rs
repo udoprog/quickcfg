@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{GitClone, GitUpdate, SystemUnit},
 };
-use anyhow::{format_err, Error};
+use anyhow::{anyhow, Error};
 use std::fmt;
 use std::time::Duration;
 
@@ -52,10 +52,7 @@ impl GitSync {
             ..
         } = input;
 
-        let id = self
-            .id
-            .as_ref()
-            .ok_or_else(|| format_err!("missing `id`"))?;
+        let id = self.id.as_ref().ok_or_else(|| anyhow!("missing `id`"))?;
 
         let id = format!("git-sync/{}", id);
 
