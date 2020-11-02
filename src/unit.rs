@@ -2,7 +2,7 @@
 
 use crate::{
     git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager, state::State,
-    FileSystem,
+    FileSystem, Timestamp,
 };
 use anyhow::{anyhow, Context as _, Error};
 use std::collections::BTreeSet;
@@ -66,7 +66,7 @@ pub struct UnitInput<'a, 's> {
     /// Unit-local state that can be mutated.
     pub state: &'a mut State<'s>,
     /// Current timestamp.
-    pub now: &'a SystemTime,
+    pub now: Timestamp,
     /// Current git system.
     pub git_system: &'a dyn GitSystem,
 }

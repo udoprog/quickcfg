@@ -1,15 +1,8 @@
 //! Things to do.
 
 use crate::{
-    environment as e,
-    facts::Facts,
-    git,
-    hierarchy::Data,
-    opts::Opts,
-    packages,
-    state::State,
-    unit::{self, SystemUnit, UnitAllocator, UnitId},
-    FileSystem,
+    environment as e, git, packages, state::State, Data, Facts, FileSystem, Opts, SystemUnit,
+    Timestamp, UnitAllocator, UnitId,
 };
 use anyhow::Error;
 use directories::BaseDirs;
@@ -17,7 +10,6 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
-use std::time::SystemTime;
 
 #[macro_use]
 mod macros;
@@ -171,7 +163,7 @@ where
     /// State accessor.
     pub state: &'a State<'a>,
     /// Current time.
-    pub now: &'a SystemTime,
+    pub now: Timestamp,
     /// Current optsion.
     pub opts: &'a Opts,
     /// The current git system.
@@ -199,7 +191,7 @@ impl<'a> Dependency<'a> {
     pub fn resolve(
         &self,
         systems: &HashMap<&'a str, Dependency<'a>>,
-    ) -> impl IntoIterator<Item = unit::Dependency> {
+    ) -> impl IntoIterator<Item = crate::unit::Dependency> {
         use std::collections::VecDeque;
 
         let mut ids = Vec::new();
@@ -214,7 +206,7 @@ impl<'a> Dependency<'a> {
                         queue.extend(systems.get(id.as_str()));
                     }
                 }
-                Dependency::Direct(id) => ids.push(unit::Dependency::Unit(id)),
+                Dependency::Direct(id) => ids.push(crate::unit::Dependency::Unit(id)),
                 Dependency::None => continue,
             }
         }

@@ -80,13 +80,14 @@ impl super::Git for External {
     }
 
     fn needs_update(&self) -> Result<bool, Error> {
+        let head = self.rev_parse("HEAD")?;
+
         let mut command = self.command.clone();
         command.working_directory(self.path());
-        command.args(&["fetch", "origin", "master"]);
+        command.args(&["fetch", "origin", head.as_str()]);
         command.run_checked()?;
 
         let remote_head = self.rev_parse("FETCH_HEAD")?;
-        let head = self.rev_parse("HEAD")?;
 
         if remote_head != head {
             // check if remote is a base

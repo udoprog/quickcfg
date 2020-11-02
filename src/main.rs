@@ -9,12 +9,11 @@ use quickcfg::{
     packages, stage,
     system::{self, SystemInput},
     unit::{self, Unit, UnitAllocator, UnitInput},
-    Config, DiskState, FileSystem, Load, Save, State,
+    Config, DiskState, FileSystem, Load, Save, State, Timestamp,
 };
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::time::SystemTime;
 
 fn report_error(e: Error) {
     let mut it = e.chain();
@@ -112,29 +111,40 @@ fn try_main() -> Result<(), Error> {
     let config = Config::load(&config_path)
         .with_context(|| anyhow!("Failed to load configuration: {}", config_path.display()))?
         .unwrap_or_default();
-    let now = SystemTime::now();
+    let now = Timestamp::now();
 
-    let state = DiskState::load(&state_path)?
-        .unwrap_or_default()
-        .into_state(&config, &now);
+    let state = match DiskState::load(&state_path) {
+        Ok(state) => state.unwrap_or_default(),
+        Err(err) => {
+            log::error!("Invalid disk state `{}`: {}", state_path.display(), err);
 
-    let state = try_apply_config(
+            if !opts.prompt("Remove it?", true)? {
+                return Ok(());
+            }
+
+            DiskState::default()
+        }
+    };
+
+    let mut state = state.into_state(&config, now);
+
+    let result = try_apply_config(
         &*git_system,
         &opts,
         &config,
-        &now,
+        now,
         base_dirs.as_ref(),
         &root,
         &state_dir,
-        state,
-    )?;
+        &mut state,
+    );
 
     if let Some(serialized) = state.serialize() {
         log::trace!("Writing state: {}", state_path.display());
         serialized.save(&state_path)?;
     }
 
-    Ok(())
+    result
 }
 
 /// Try to initialize the repository from the given path.
@@ -145,26 +155,26 @@ fn try_init(git_system: &dyn git::GitSystem, url: &str, root: &Path) -> Result<(
 
 #[allow(clippy::too_many_arguments)]
 /// Internal method to try to apply the given configuration.
-fn try_apply_config<'a>(
-    git_system: &'a dyn git::GitSystem,
+fn try_apply_config(
+    git_system: &dyn git::GitSystem,
     opts: &Opts,
     config: &Config,
-    now: &SystemTime,
+    now: Timestamp,
     base_dirs: Option<&BaseDirs>,
     root: &Path,
     state_dir: &Path,
-    mut state: State<'a>,
-) -> Result<State<'a>, Error> {
+    state: &mut State<'_>,
+) -> Result<(), Error> {
     use rayon::prelude::*;
 
     let pool = rayon::ThreadPoolBuilder::new()
         .build()
         .with_context(|| anyhow!("Failed to construct thread pool"))?;
 
-    if !try_update_config(git_system, opts, config, now, root, &mut state)? {
+    if !try_update_config(git_system, opts, config, now, root, state)? {
         // if we only want to run on updates, exit now.
         if opts.updates_only {
-            return Ok(state);
+            return Ok(());
         }
     }
 
@@ -219,7 +229,7 @@ fn try_apply_config<'a>(
                 environment,
                 allocator: &allocator,
                 file_system: &file_system,
-                state: &state,
+                state,
                 now,
                 opts,
                 git_system,
@@ -330,12 +340,13 @@ fn try_apply_config<'a>(
                     }) {
                         Ok(()) => {
                             scheduler.mark(unit);
-                            state.extend(s);
                         }
                         Err(e) => {
                             errors.push((unit, e));
                         }
                     }
+
+                    state.extend(s);
                 }
 
                 continue;
@@ -356,21 +367,21 @@ fn try_apply_config<'a>(
                         git_system,
                     });
 
-                    match res {
-                        Ok(()) => Ok((unit, s)),
-                        Err(e) => Err((unit, e)),
-                    }
+                    (res, unit, s)
                 })
-                .collect::<Vec<Result<_, _>>>();
+                .collect::<Vec<_>>();
 
-            for res in results {
+            for (res, unit, s) in results {
                 match res {
-                    Ok((unit, s)) => {
-                        state.extend(s);
+                    Ok(()) => {
                         scheduler.mark(unit);
                     }
-                    Err((unit, e)) => errors.push((unit, e)),
+                    Err(e) => {
+                        errors.push((unit, e));
+                    }
                 }
+
+                state.extend(s);
             }
         }
     });
@@ -398,7 +409,7 @@ fn try_apply_config<'a>(
         bail!("Could not schedule all units");
     }
 
-    Ok(state)
+    Ok(())
 }
 
 /// Try to update config from git.
@@ -408,7 +419,7 @@ fn try_update_config(
     git_system: &dyn git::GitSystem,
     opts: &Opts,
     config: &Config,
-    now: &SystemTime,
+    now: Timestamp,
     root: &Path,
     state: &mut State,
 ) -> Result<bool, Error> {

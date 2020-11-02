@@ -10,6 +10,7 @@ const DEFAULT_PACKAGE_REFRESH_SECONDS: u64 = 3600;
 
 /// Configuration model.
 #[derive(Deserialize, Default, Debug, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// The interval at which we check for git refresh.
     #[serde(default = "default_git_refresh", deserialize_with = "human_duration")]

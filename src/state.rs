@@ -1,37 +1,39 @@
 //! Model for state file.
 
 use crate::config::Config;
+use crate::Timestamp;
 use anyhow::Error;
 use fxhash::FxHasher64;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
-use std::time::SystemTime;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Hashed {
     /// The last calculated hash.
     pub hash: u64,
     /// When it was last updated.
-    pub updated: SystemTime,
+    pub updated: Timestamp,
 }
 
 /// The way the state is serialized.
 #[derive(Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct DiskState {
     /// Last time git was updated.
     #[serde(default)]
-    pub last_update: BTreeMap<String, SystemTime>,
+    pub last_update: BTreeMap<String, Timestamp>,
     /// Things that should only happen once.
     #[serde(default)]
-    pub once: BTreeMap<String, SystemTime>,
+    pub once: BTreeMap<String, Timestamp>,
     #[serde(default)]
     pub hashes: BTreeMap<String, Hashed>,
 }
 
 impl DiskState {
     /// Convert into a state.
-    pub fn into_state<'a>(self, config: &'a Config, now: &'a SystemTime) -> State<'a> {
+    pub fn into_state<'a>(self, config: &'a Config, now: Timestamp) -> State<'a> {
         State {
             dirty: false,
             last_update: self.last_update,
@@ -50,19 +52,19 @@ impl DiskState {
 pub struct State<'a> {
     pub dirty: bool,
     /// Last time git was updated.
-    pub last_update: BTreeMap<String, SystemTime>,
+    pub last_update: BTreeMap<String, Timestamp>,
     /// Things that should only happen once.
-    pub once: BTreeMap<String, SystemTime>,
+    pub once: BTreeMap<String, Timestamp>,
     /// Things that have been tested against a hash.
     pub hashes: BTreeMap<String, Hashed>,
     /// The current configuration.
     pub config: &'a Config,
     /// Current timestamp.
-    pub now: &'a SystemTime,
+    pub now: Timestamp,
 }
 
 impl<'a> State<'a> {
-    pub fn new(config: &'a Config, now: &'a SystemTime) -> Self {
+    pub fn new(config: &'a Config, now: Timestamp) -> Self {
         State {
             dirty: Default::default(),
             last_update: Default::default(),
@@ -74,14 +76,14 @@ impl<'a> State<'a> {
     }
 
     /// Get the last update timestamp for the given thing named `name`.
-    pub fn last_update<'time>(&'time self, name: &str) -> Option<&'time SystemTime> {
+    pub fn last_update<'time>(&'time self, name: &str) -> Option<&'time Timestamp> {
         self.last_update.get(name)
     }
 
     /// Touch the thing with the given name.
     pub fn touch(&mut self, name: &str) {
         self.dirty = true;
-        self.last_update.insert(name.to_string(), SystemTime::now());
+        self.last_update.insert(name.to_string(), Timestamp::now());
     }
 
     /// Check if the given ID has run once.
@@ -92,7 +94,7 @@ impl<'a> State<'a> {
     /// Mark that something has happened once.
     pub fn touch_once(&mut self, id: &str) {
         self.dirty = true;
-        self.once.insert(id.to_string(), SystemTime::now());
+        self.once.insert(id.to_string(), Timestamp::now());
     }
 
     /// Touch the hashed item.
@@ -124,7 +126,7 @@ impl<'a> State<'a> {
             id.to_string(),
             Hashed {
                 hash: state.finish(),
-                updated: SystemTime::now(),
+                updated: Timestamp::now(),
             },
         );
 

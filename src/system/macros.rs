@@ -10,6 +10,7 @@ macro_rules! system_struct {
     }) => {
         $(#[$name_meta])*
         #[derive(::serde::Deserialize, Debug, PartialEq, Eq)]
+        #[serde(deny_unknown_fields)]
         pub struct $name {
             /// Id of this system.
             pub id: Option<String>,
