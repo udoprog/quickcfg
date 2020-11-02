@@ -1,6 +1,6 @@
 [package]
 name = "quickcfg"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["John-John Tedro <udoprog@tedro.se>"]
 license = "MIT/Apache-2.0"
 categories = ["command-line-utilities"]
@@ -47,4 +47,4 @@ winapi = { version = "0.3.9", features = ["shellapi", "winuser", "synchapi", "pr
 winres = "0.1.11"
 
 [features]
-default = []
+default = ["git2"]
