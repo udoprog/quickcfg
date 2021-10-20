@@ -205,6 +205,21 @@ detected.
 Explicitly configured providers look up packages based on the hierarchy key `<provider>::packages`.
 Default providers use the key `packages`.
 
+#### `download`
+
+Downloads a single file into the given target path.
+
+```yaml
+type: download
+id: plug-vim
+# Url to download the command from.
+url: https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+# Path to download to.
+path: home://.config/nvim/autoload/plug.vim
+```
+
+The `id` is to uniquely identify that this system has only been run once.
+
 #### `download-and-run`
 
 Downloads a script of the internet and runs it once.

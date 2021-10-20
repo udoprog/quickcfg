@@ -477,27 +477,38 @@ impl From<Install> for Unit {
 
 /// Download the given URL as an executable and write to the given path.
 #[derive(Debug)]
-pub struct Download(pub reqwest::Url, pub PathBuf);
+pub struct Download {
+    pub url: reqwest::Url,
+    pub path: PathBuf,
+    pub id: Option<Box<str>>,
+}
 
 impl fmt::Display for Download {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "download {} to {}", self.0, self.1.display())
+        write!(fmt, "download {} to {}", self.url, self.path.display())
     }
 }
 
 impl Download {
     fn apply(&self, input: UnitInput) -> Result<(), Error> {
         use std::fs::File;
-        let UnitInput { .. } = input;
-        let Download(ref url, ref path) = *self;
+        let UnitInput { state, .. } = input;
+        let Download { url, path, id } = self;
 
-        let mut out = File::create(&path)
-            .with_context(|| anyhow!("Failed to open file: {}", path.display()))?;
+        if !path.is_file() {
+            let mut out =
+                File::create(&path).with_context(|| anyhow!("open file: {}", path.display()))?;
 
-        let mut response = reqwest::blocking::get(url.clone())
-            .with_context(|| anyhow!("Failed to download URL: {}", url))?;
+            let mut response = reqwest::blocking::get(url.clone())
+                .with_context(|| anyhow!("download url: {}", url))?;
 
-        response.copy_to(&mut out)?;
+            response.copy_to(&mut out)?;
+        }
+
+        if let Some(id) = id {
+            state.touch_once(&id);
+        }
+
         Ok(())
     }
 }

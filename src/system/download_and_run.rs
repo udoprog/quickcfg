@@ -81,7 +81,11 @@ impl DownloadAndRun {
 
         let download = if !path.is_file() {
             // Download the file.
-            Some(allocator.unit(Download(url, path.to_owned())))
+            Some(allocator.unit(Download {
+                url,
+                path: path.to_owned(),
+                id: None,
+            }))
         } else {
             None
         };

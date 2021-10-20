@@ -14,6 +14,7 @@ use std::path::Path;
 #[macro_use]
 mod macros;
 mod copy_dir;
+mod download;
 mod download_and_run;
 mod from_db;
 mod git_sync;
@@ -23,6 +24,7 @@ mod link_dir;
 mod only_for;
 
 use self::copy_dir::CopyDir;
+use self::download::Download;
 use self::download_and_run::DownloadAndRun;
 use self::from_db::FromDb;
 use self::git_sync::GitSync;
@@ -117,6 +119,8 @@ pub enum System {
     Install(Install),
     #[serde(rename = "download-and-run")]
     DownloadAndRun(DownloadAndRun),
+    #[serde(rename = "download")]
+    Download(Download),
     #[serde(rename = "link")]
     Link(Link),
     #[serde(rename = "git-sync")]
@@ -132,6 +136,7 @@ system_impl![
     LinkDir,
     Install,
     DownloadAndRun,
+    Download,
     Link,
     GitSync,
     OnlyFor,

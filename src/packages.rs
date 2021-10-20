@@ -4,6 +4,7 @@
 
 mod cargo;
 mod debian;
+mod fedora;
 mod python;
 mod ruby;
 mod rustup_components;
@@ -43,6 +44,7 @@ impl Provider {
 
         match name {
             "debian" => test(debian::PackageManager::new()),
+            "fedora" => test(fedora::PackageManager::new()),
             "pip" => test(python::PackageManager::new("pip")),
             "pip3" => test(python::PackageManager::new("pip3")),
             "gem" => test(ruby::PackageManager::new()),
@@ -78,6 +80,7 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
 
     match distro {
         "debian" => test(debian::PackageManager::new()),
+        "fedora" => test(fedora::PackageManager::new()),
         distro => {
             warn!("no package integration for distro: {}", distro);
             Ok(None)
