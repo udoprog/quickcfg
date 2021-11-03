@@ -106,7 +106,9 @@ impl Template {
                 }
             }
 
-            bail!("missing closing '}'")
+            // Hide '}' in this error message from the formatting machinery in bail macro
+            let msg = "missing closing '}'";
+            bail!(msg)
         }
 
         fn environ(
