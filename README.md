@@ -1,5 +1,9 @@
 # quickcfg
-[![Build Status](https://travis-ci.org/udoprog/quickcfg.svg?branch=master)](https://travis-ci.org/udoprog/quickcfg)
+
+[<img alt="github" src="https://img.shields.io/badge/github-udoprog/quickcfg-8da0cb?style=for-the-badge&logo=github" height="20">](https://github.com/udoprog/quickcfg)
+[<img alt="crates.io" src="https://img.shields.io/crates/v/quickcfg.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/quickcfg)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-quickcfg-66c2a5?style=for-the-badge&logoColor=white&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K" height="20">](https://docs.rs/quickcfg)
+[<img alt="build status" src="https://img.shields.io/github/workflow/status/udoprog/quickcfg/CI/main?style=for-the-badge" height="20">](https://github.com/udoprog/quickcfg/actions?query=branch%3Amain)
 
 Apply a base configuration to a system, quickly!
 
@@ -13,6 +17,8 @@ I've tried my best to make all operations non-destructive, but beware of bugs!
 [dotfiles]: https://github.com/udoprog/dotfiles
 
 ![Example](gfx/example1.gif)
+
+<br>
 
 ## Getting started
 
@@ -34,6 +40,8 @@ To find out where the various quickcfg directories are, use:
 qc --paths
 ```
 
+<br>
+
 ## Features
 
 **Zero dependencies**, All you need is the `quickcfg` binary and your configuration repo.
@@ -46,6 +54,8 @@ run in parallel.
 
 **Uses fast checksumming**, to reduce the amount of unnecessary work. Only applies changes when it
 has to.
+
+<br>
 
 ## Automatically applying updates
 
@@ -63,15 +73,17 @@ Every time you open a shell quickcfg will not check if your dotfiles are up-to-d
 
 You control how frequently by setting the `git_refresh` option in `quickcfg.yml`:
 
-```
+```rust
 git_refresh: 3d
 ```
+
+<br>
 
 ## Configuration
 
 Create a repository with a `quickcfg.yml` in its root:
 
-```
+```rust
 git_refresh: 1d
 
 hierarchy:
@@ -80,7 +92,6 @@ hierarchy:
   - db/{distro}.yml
 
 systems:
-  # System to ensure that a set of packages are installed.
   - type: install
 ```
 
@@ -106,6 +117,8 @@ The following section will detail all the systems which are available.
 
 [`hierarchy`]: #hierarchy
 
+<br>
+
 ## Hierarchy
 
 The hierarchy is a collection of files which contain data.
@@ -119,7 +132,11 @@ top of the template.
 [`install`]: #install
 [`templates`]: #templating
 
+<br>
+
 ## Systems
+
+<br>
 
 #### `copy-dir`
 
@@ -133,6 +150,8 @@ templates: false
 ```
 
 Will copy a directory recursively.
+
+<br>
 
 #### `link-dir`
 
@@ -148,6 +167,8 @@ to: home://some/dir
 
 Will create the corresponding directory structure, but all files will be symbolic links.
 
+<br>
+
 #### `git-sync`
 
 System that syncs a single git repository to some path.
@@ -161,6 +182,8 @@ remote: https://github.com/robbyrussell/oh-my-zsh.git
 # Refresh once per day.
 refresh: 1d
 ```
+
+<br>
 
 #### `install`
 
@@ -205,6 +228,8 @@ detected.
 Explicitly configured providers look up packages based on the hierarchy key `<provider>::packages`.
 Default providers use the key `packages`.
 
+<br>
+
 #### `download`
 
 Downloads a single file into the given target path.
@@ -219,6 +244,8 @@ path: home://.config/nvim/autoload/plug.vim
 ```
 
 The `id` is to uniquely identify that this system has only been run once.
+
+<br>
 
 #### `download-and-run`
 
@@ -237,6 +264,8 @@ shell: true
 
 The `id` is to uniquely identify that this system has only been run once.
 
+<br>
+
 #### `link`
 
 Creates a symlink.
@@ -248,6 +277,8 @@ link: .vim/vimrc
 ```
 
 This creates a symbolic link at `path` which contains whatever is specified in `link`.
+
+<br>
 
 #### `only-for`
 
@@ -265,6 +296,8 @@ systems:
     args: ["-y"]
 ```
 
+<br>
+
 ## Templating
 
 Some systems treats files as templates, like [`copy-dir`] when the `templating` option is enabled.
@@ -273,8 +306,7 @@ Any file being copied is then treated as a [`handlebars`] template.
 Any template file can make use of hierarchy data, by specifying their dependencies using
 a `quickcfg:` tag at the top of the file, like this:
 
-```
-# quickcfg: name, hobbies:array
+```rust
 
 Hi, my name is {{name}}
 
