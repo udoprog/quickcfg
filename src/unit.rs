@@ -92,7 +92,7 @@ macro_rules! unit {
                     $($name(ref unit) => unit.apply(input),)*
                 };
 
-                Ok(res.with_context(|| anyhow!("Failed to run unit: {:?}", self))?)
+                res.with_context(|| anyhow!("Failed to run unit: {:?}", self))
             }
         }
 
@@ -258,7 +258,7 @@ impl CopyFile {
         log::info!("{} -> {}", from.display(), to.display());
         io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
         // make sure timestamp is in sync.
-        FileSystem::touch(&to, from_modified)
+        FileSystem::touch(to, from_modified)
     }
 }
 
@@ -329,7 +329,7 @@ impl CopyTemplate {
         // This includes:
         // * Reading the template file to determine which database variables to use.
 
-        let content = fs::read_to_string(&from)
+        let content = fs::read_to_string(from)
             .map_err(|e| anyhow!("failed to read path: {}: {}", from.display(), e))?;
 
         let data = data.load_from_spec(&content).map_err(|e| {
@@ -343,18 +343,18 @@ impl CopyTemplate {
         let id = self.id();
         let hash = (&data, &content);
 
-        if to_exists && read_state.is_hash_fresh(&id, &hash)? {
+        if to_exists && read_state.is_hash_fresh(&id, hash)? {
             // Nothing about the template would change, only update the modified time of the file.
             log::info!("touching {}", to.display());
             // only need to update timestamp.
-            return FileSystem::touch(&to, from_modified);
+            return FileSystem::touch(to, from_modified);
         }
 
         let reg = Handlebars::new();
 
         let mut out = Vec::<u8>::new();
 
-        let mut tpl = Template::compile2(&content, true)?;
+        let mut tpl = Template::compile(&content)?;
         tpl.name = Some(from.display().to_string());
 
         tpl.render(
@@ -365,9 +365,9 @@ impl CopyTemplate {
         )?;
 
         log::info!("{} -> {} (template)", from.display(), to.display());
-        File::create(&to)?.write_all(&out)?;
-        state.touch_hash(&id, &hash)?;
-        return FileSystem::touch(&to, from_modified);
+        File::create(to)?.write_all(&out)?;
+        state.touch_hash(&id, hash)?;
+        return FileSystem::touch(to, from_modified);
 
         pub struct WriteOutput<W: Write> {
             write: W,
@@ -464,7 +464,7 @@ impl Install {
             package_manager.install_packages(to_install)?;
         }
 
-        state.touch_hash(id, &all_packages)?;
+        state.touch_hash(id, all_packages)?;
         Ok(())
     }
 }
@@ -497,7 +497,7 @@ impl Download {
 
         if !path.is_file() {
             let mut out =
-                File::create(&path).with_context(|| anyhow!("open file: {}", path.display()))?;
+                File::create(path).with_context(|| anyhow!("open file: {}", path.display()))?;
 
             let mut response = reqwest::blocking::get(url.clone())
                 .with_context(|| anyhow!("download url: {}", url))?;
@@ -506,7 +506,7 @@ impl Download {
         }
 
         if let Some(id) = id {
-            state.touch_once(&id);
+            state.touch_once(id);
         }
 
         Ok(())
@@ -538,7 +538,10 @@ pub struct AddMode {
 
 impl AddMode {
     /// Create a new add mode unit.
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+    pub fn new<P>(path: &P) -> Self
+    where
+        P: ?Sized + AsRef<Path>,
+    {
         Self {
             path: path.as_ref().to_owned(),
             user: 0,
@@ -682,7 +685,7 @@ impl RunOnce {
             ));
         }
 
-        state.touch_once(&id);
+        state.touch_once(id);
         return Ok(());
 
         #[cfg(windows)]
@@ -786,7 +789,7 @@ impl GitClone {
 
         log::info!("Cloning `{}` into `{}`", remote, path.display());
         GitSystem::clone(git_system, remote, path)?;
-        state.touch(&id);
+        state.touch(id);
         Ok(())
     }
 }
@@ -839,7 +842,7 @@ impl GitUpdate {
             }
         }
 
-        state.touch(&id);
+        state.touch(id);
         Ok(())
     }
 }

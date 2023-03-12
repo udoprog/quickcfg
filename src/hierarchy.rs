@@ -1,6 +1,6 @@
 //! Dealing with the hierarchy of data.
-use crate::{environment as e, facts::Facts, Template};
-use anyhow::{anyhow, bail, Error};
+
+use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 use std::env;
@@ -8,6 +8,8 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 use std::time::SystemTime;
+
+use crate::{environment as e, facts::Facts, Template};
 
 const HEADER: &str = "quickcfg:";
 
@@ -29,7 +31,7 @@ impl Data {
     }
 
     /// Load the given key.
-    pub fn load<'de, T>(&self, key: &str) -> Result<Option<T>, Error>
+    pub fn load<'de, T>(&self, key: &str) -> Result<Option<T>>
     where
         T: Deserialize<'de>,
     {
@@ -45,15 +47,15 @@ impl Data {
     }
 
     /// Load the given key, if it doesn't exist, use a default value.
-    pub fn load_or_default<'de, T>(&self, key: &str) -> Result<T, Error>
+    pub fn load_or_default<'de, T>(&self, key: &str) -> Result<T>
     where
         T: Default + Deserialize<'de>,
     {
-        self.load(key).map(|v| v.unwrap_or_else(T::default))
+        self.load(key).map(|v| v.unwrap_or_default())
     }
 
     /// Load the given key, if it doesn't exist, use a default value.
-    pub fn load_array<'de, T>(&self, key: &str) -> Result<Vec<T>, Error>
+    pub fn load_array<'de, T>(&self, key: &str) -> Result<Vec<T>>
     where
         T: Deserialize<'de>,
     {
@@ -72,7 +74,7 @@ impl Data {
 
     /// Load data based on a file spec.
     /// This is typically in the first couple of lines in a file.
-    pub fn load_from_spec(&self, content: &str) -> Result<Mapping, Error> {
+    pub fn load_from_spec(&self, content: &str) -> Result<Mapping> {
         let mut m = Mapping::default();
 
         // look at the first 5 lines.
@@ -132,7 +134,7 @@ pub fn load<'a>(
     root: &Path,
     facts: &Facts,
     environment: impl Copy + e::Environment,
-) -> Result<Data, Error> {
+) -> Result<Data> {
     let mut stages = Vec::new();
     let mut last_modified = None;
 
@@ -151,7 +153,7 @@ pub fn load<'a>(
                     log::trace!("skipping missing file: {}", path.display());
                     continue;
                 }
-                _ => return Err(Error::from(e)),
+                _ => return Err(anyhow::Error::from(e)),
             },
         };
 
@@ -171,12 +173,10 @@ pub fn load<'a>(
     return Ok(Data::new(last_modified, stages));
 
     /// Extend the existing mapping from the given hierarchy.
-    fn load_mapping(path: &Path) -> Result<serde_yaml::Mapping, Error> {
-        let file = match File::open(&path) {
+    fn load_mapping(path: &Path) -> Result<serde_yaml::Mapping> {
+        let file = match File::open(path) {
             Ok(file) => file,
-            Err(e) => match e.kind() {
-                _ => bail!("failed to open file: {}", e),
-            },
+            Err(e) => bail!("failed to open file: {e}"),
         };
 
         match serde_yaml::from_reader(file)? {

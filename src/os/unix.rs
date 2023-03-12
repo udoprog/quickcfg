@@ -1,13 +1,13 @@
 //! Unix-specific implementations.
 
 use crate::unit::{AddMode, Symlink};
-use anyhow::{anyhow, Context as _, Error};
+use anyhow::{anyhow, Context, Result};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 /// Convert into an executable path.
-pub fn exe_path(path: PathBuf) -> PathBuf {
-    path
+pub fn exe_path(path: &Path) -> Cow<'_, Path> {
+    Cow::Borrowed(path)
 }
 
 /// Convert the given command into a path.
@@ -19,12 +19,12 @@ pub fn command(base: &str) -> Cow<'_, Path> {
 
 /// Detect git command.
 #[allow(unused)]
-pub fn detect_git() -> Result<PathBuf, Error> {
+pub fn detect_git() -> Result<PathBuf> {
     Ok(PathBuf::from("git"))
 }
 
 /// Add the given modes (on top of the existing ones).
-pub fn add_mode(add_mode: &AddMode) -> Result<(), Error> {
+pub fn add_mode(add_mode: &AddMode) -> Result<()> {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
@@ -39,7 +39,7 @@ pub fn add_mode(add_mode: &AddMode) -> Result<(), Error> {
 }
 
 /// Create a symlink.
-pub fn create_symlink(symlink: &Symlink) -> Result<(), Error> {
+pub fn create_symlink(symlink: &Symlink) -> Result<()> {
     use std::{fs, os::unix};
 
     let Symlink {
@@ -50,7 +50,7 @@ pub fn create_symlink(symlink: &Symlink) -> Result<(), Error> {
 
     if remove {
         log::info!("re-linking {} to {}", path.display(), link.display());
-        fs::remove_file(&path)?;
+        fs::remove_file(path)?;
     } else {
         log::info!("linking {} to {}", path.display(), link.display());
     }

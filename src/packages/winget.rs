@@ -64,7 +64,7 @@ impl WinGet {
         for p in crate::ffi::win::msi::msi_enum_products()? {
             let mut it = p.name.split('.');
 
-            match it.next_back().as_deref() {
+            match it.next_back() {
                 Some("msi") => (),
                 _ => break,
             }

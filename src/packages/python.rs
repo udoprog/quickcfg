@@ -43,7 +43,7 @@ impl Pip {
         for line in command.run_lines()? {
             let line = line.trim();
 
-            if line == "" {
+            if line.is_empty() {
                 continue;
             }
 

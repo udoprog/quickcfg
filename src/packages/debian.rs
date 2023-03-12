@@ -73,7 +73,7 @@ impl DpkgQuery {
         for line in dpkg_query.run_lines()? {
             let line = line.trim();
 
-            if line == "" {
+            if line.is_empty() {
                 continue;
             }
 

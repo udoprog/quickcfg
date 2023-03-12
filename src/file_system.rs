@@ -155,7 +155,7 @@ impl<'a> FileSystem<'a> {
         to_meta: Option<&fs::Metadata>,
         template: bool,
     ) -> Result<Option<SystemUnit>, Error> {
-        let from_modified = match self.should_copy_file(&from_meta, &to, to_meta, template)? {
+        let from_modified = match self.should_copy_file(&from_meta, to, to_meta, template)? {
             Some(modified) => modified,
             None => return Ok(None),
         };

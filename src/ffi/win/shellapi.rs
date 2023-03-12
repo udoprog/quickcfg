@@ -81,10 +81,10 @@ where
 
         params.push(' ');
 
-        if arg.len() == 0 {
+        if arg.is_empty() {
             params.push_str("\"\"");
         } else if arg.find(&[' ', '\t', '"'][..]).is_none() {
-            params.push_str(&arg);
+            params.push_str(arg);
         } else {
             params.push('"');
 

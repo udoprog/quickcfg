@@ -63,7 +63,7 @@ impl LinkDir {
 
             let link = to_path
                 .parent()
-                .and_then(|p| FileSystem::path_relative_from(&from_path, p))
+                .and_then(|p| FileSystem::path_relative_from(from_path, p))
                 .unwrap_or_else(|| from_path.to_owned());
 
             // Maybe create a symlink!

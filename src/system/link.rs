@@ -49,7 +49,7 @@ impl Link {
         let link = if link.is_absolute() {
             path.parent()
                 .and_then(|p| FileSystem::path_relative_from(&link, p))
-                .unwrap_or_else(|| link)
+                .unwrap_or(link)
         } else {
             link
         };

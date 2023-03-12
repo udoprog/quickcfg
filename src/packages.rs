@@ -61,10 +61,8 @@ impl Provider {
 pub fn detect(facts: &Facts) -> Result<Provider, Error> {
     let default = if let Some(default) = by_distro(facts)? {
         Some(default)
-    } else if let Some(default) = by_os(facts)? {
-        Some(default)
     } else {
-        None
+        by_os(facts)?
     };
 
     Ok(Provider { default })

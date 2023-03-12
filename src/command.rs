@@ -174,12 +174,12 @@ impl Command {
 
     /// Run the command and wait for exit status.
     pub fn status(self) -> io::Result<process::ExitStatus> {
-        Ok(self.command().status()?)
+        self.command().status()
     }
 
     /// Run as administrator.
     #[cfg(windows)]
     pub fn runas(self) -> io::Result<i32> {
-        Ok(crate::ffi::win::shellapi::runas(self)?)
+        crate::ffi::win::shellapi::runas(self)
     }
 }

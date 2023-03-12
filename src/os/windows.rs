@@ -4,23 +4,32 @@ use crate::unit::{AddMode, Symlink};
 use anyhow::{bail, Error};
 use std::borrow::Cow;
 use std::env::consts;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Convert into an executable path.
-pub fn exe_path(mut path: PathBuf) -> PathBuf {
+pub fn exe_path<P>(path: &P) -> Cow<'_, Path>
+where
+    P: ?Sized + AsRef<Path>,
+{
+    let path = path.as_ref();
+
     if path.extension() == Some(consts::EXE_EXTENSION.as_ref()) {
-        return path;
+        return Cow::Borrowed(path);
     }
 
+    let mut path = path.to_owned();
     path.set_extension(consts::EXE_EXTENSION);
-    path
+    Cow::Owned(path)
 }
 
 /// Convert the given command into a path.
 ///
 /// This adds the platform-specific extension for Windows.
-pub fn command<'a>(base: &'a str) -> Cow<'a, Path> {
-    Cow::from(exe_path(PathBuf::from(base)))
+pub fn command<P>(base: &P) -> Cow<'_, Path>
+where
+    P: ?Sized + AsRef<Path>,
+{
+    exe_path(base)
 }
 
 /// Add the given modes (on top of the existing ones).
@@ -48,18 +57,18 @@ pub fn create_symlink(symlink: &Symlink) -> Result<(), Error> {
 
     if remove {
         log::info!("re-linking {} to {}", path.display(), link.display());
-        fs::remove_file(&path)?;
+        fs::remove_file(path)?;
     } else {
         log::info!("linking {} to {}", path.display(), link.display());
     }
 
     if path.is_file() {
-        symlink_file(path, path.join(&link))?;
+        symlink_file(path, path.join(link))?;
         return Ok(());
     }
 
     if path.is_dir() {
-        symlink_dir(path, path.join(&link))?;
+        symlink_dir(path, path.join(link))?;
         return Ok(());
     }
 

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context as _, Error};
 use directories::BaseDirs;
-use log;
+
 use quickcfg::{
     environment as e,
     facts::Facts,
@@ -221,7 +221,7 @@ fn try_apply_config(
     pool.install(|| {
         let res = systems.par_iter().map(|system| {
             let res = system.apply(SystemInput {
-                root: &root,
+                root,
                 base_dirs,
                 facts: &facts,
                 data: &data,
@@ -328,12 +328,12 @@ fn try_apply_config(
 
             if stage.thread_local {
                 for unit in stage.units {
-                    let mut s = State::new(&config, now);
+                    let mut s = State::new(config, now);
 
                     match unit.apply(UnitInput {
                         data: &data,
                         packages: &packages,
-                        read_state: &state,
+                        read_state: state,
                         state: &mut s,
                         now,
                         git_system,
@@ -356,12 +356,12 @@ fn try_apply_config(
                 .units
                 .into_par_iter()
                 .map(|unit| {
-                    let mut s = State::new(&config, now);
+                    let mut s = State::new(config, now);
 
                     let res = unit.apply(UnitInput {
                         data: &data,
                         packages: &packages,
-                        read_state: &state,
+                        read_state: state,
                         state: &mut s,
                         now,
                         git_system,
@@ -424,7 +424,7 @@ fn try_update_config(
     state: &mut State,
 ) -> Result<bool, Error> {
     if let Some(last_update) = state.last_update("git") {
-        let duration = now.duration_since(last_update.clone())?;
+        let duration = now.duration_since(*last_update)?;
 
         if duration < config.git_refresh {
             return Ok(false);

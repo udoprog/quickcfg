@@ -59,7 +59,7 @@ impl Dnf {
         for line in dnf.run_lines()?.into_iter().skip(1) {
             let line = line.trim();
 
-            if line == "" {
+            if line.is_empty() {
                 continue;
             }
 

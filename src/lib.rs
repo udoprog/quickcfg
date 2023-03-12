@@ -323,6 +323,8 @@
 //! [`copy-dir`]: #copy-dir
 //! [`handlebars`]: https://handlebarsjs.com/
 
+#![allow(clippy::field_reassign_with_default)]
+
 mod command;
 mod config;
 pub mod environment;

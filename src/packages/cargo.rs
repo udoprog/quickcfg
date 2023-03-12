@@ -60,7 +60,7 @@ impl Cargo {
 
             let line = line.trim();
 
-            if line == "" {
+            if line.is_empty() {
                 continue;
             }
 

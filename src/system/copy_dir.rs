@@ -74,7 +74,7 @@ impl CopyDir {
 
             if source_type.is_file() {
                 units.extend(file_system.copy_file(
-                    &from_path,
+                    from_path,
                     from,
                     &to_path,
                     to.as_ref(),

@@ -64,7 +64,7 @@ impl GitSync {
         };
 
         if let Some(last_update) = state.last_update(&id) {
-            let duration = now.duration_since(last_update.clone())?;
+            let duration = now.duration_since(*last_update)?;
 
             if duration < self.refresh {
                 return Ok(units);

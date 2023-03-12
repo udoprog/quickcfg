@@ -13,7 +13,7 @@ impl Timestamp {
 
     /// Get the duration since another duration.
     pub fn duration_since(self, other: Self) -> Result<Duration, std::time::SystemTimeError> {
-        Ok(self.0.duration_since(other.0)?)
+        self.0.duration_since(other.0)
     }
 }
 

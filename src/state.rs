@@ -33,7 +33,7 @@ pub struct DiskState {
 
 impl DiskState {
     /// Convert into a state.
-    pub fn into_state<'a>(self, config: &'a Config, now: Timestamp) -> State<'a> {
+    pub fn into_state(self, config: &Config, now: Timestamp) -> State<'_> {
         State {
             dirty: false,
             last_update: self.last_update,

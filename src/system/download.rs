@@ -69,7 +69,7 @@ impl Download {
 
         let mut download = allocator.unit(unit::Download {
             url,
-            path: path.to_owned(),
+            path,
             id: None,
         });
 

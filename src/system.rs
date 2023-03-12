@@ -86,7 +86,7 @@ macro_rules! system_impl {
                     $($name(system) => system.apply(input),)*
                 };
 
-                Ok(res.with_context(|| anyhow!("Failed to run system: {:?}", self))?)
+                res.with_context(|| anyhow!("Failed to run system: {:?}", self))
             }
         }
 
@@ -176,19 +176,15 @@ where
 }
 
 /// Helper structure used to resolve dependencies.
+#[derive(Default)]
 pub enum Dependency<'a> {
     /// Transitive dependency, where we have to look up other systems to fully resolve.
     Transitive(&'a [String]),
     /// Direct dependency to another unit.
     Direct(UnitId),
     /// No dependencies.
+    #[default]
     None,
-}
-
-impl Default for Dependency<'_> {
-    fn default() -> Self {
-        Dependency::None
-    }
 }
 
 impl<'a> Dependency<'a> {

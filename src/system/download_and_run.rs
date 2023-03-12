@@ -52,7 +52,7 @@ impl DownloadAndRun {
 
         let generated_id;
 
-        let id = match self.id.as_deref().or_else(|| self.name.as_deref()) {
+        let id = match self.id.as_deref().or(self.name.as_deref()) {
             Some(id) => id,
             None => {
                 if let Some(base) = base {
@@ -75,7 +75,8 @@ impl DownloadAndRun {
             id
         };
 
-        let path = os::exe_path(file_system.state_path(name));
+        let state_path = file_system.state_path(name);
+        let path = os::exe_path(&state_path);
 
         let mut units = Vec::new();
 
@@ -83,7 +84,7 @@ impl DownloadAndRun {
             // Download the file.
             Some(allocator.unit(Download {
                 url,
-                path: path.to_owned(),
+                path: path.clone().into_owned(),
                 id: None,
             }))
         } else {
@@ -91,14 +92,14 @@ impl DownloadAndRun {
         };
 
         // Make the downloaded file executable.
-        let mode = AddMode::new(path.to_owned()).user(Mode::Execute);
+        let mode = AddMode::new(&path).user(Mode::Execute);
         let mut add_mode = allocator.unit(mode);
         add_mode
             .dependencies
             .extend(download.as_ref().map(|d| Dependency::Unit(d.id)));
 
         // Run the downloaded file.
-        let mut run_once = RunOnce::new(id.to_string(), path.to_owned());
+        let mut run_once = RunOnce::new(id.to_string(), path.into_owned());
         run_once.shell = self.shell;
         run_once.root = self.root;
 

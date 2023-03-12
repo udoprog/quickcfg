@@ -267,9 +267,7 @@ mod tests {
         environment.insert("HOME".to_string(), "home".to_string());
 
         assert_eq!(
-            t.render(&facts, &environment, |_| Ok(()))
-                .unwrap()
-                .map(|n| n.to_string()),
+            t.render(&facts, &environment, |_| Ok(())).unwrap(),
             Some("root/baz/home/bar.yaml".to_string())
         );
     }

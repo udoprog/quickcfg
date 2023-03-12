@@ -1,95 +1,48 @@
 //! Set up options.
 
-use anyhow::{bail, Error};
-use clap::{App, Arg};
+use anyhow::{bail, Result};
+use clap::Parser;
 use directories::BaseDirs;
 use std::path::PathBuf;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn app() -> App<'static, 'static> {
-    App::new("quickcfg")
-        .version(VERSION)
-        .author("John-John Tedro <udoprog@tedro.se>")
-        .about("Configure your system, quickly!")
-        .arg(
-            Arg::with_name("root")
-                .long("root")
-                .help("Run using the given path as a configuration root.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("init")
-                .long("init")
-                .help("Initialize against the given repository.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("paths")
-                .long("paths")
-                .help("Print paths used by quickcfg."),
-        )
-        .arg(
-            Arg::with_name("force")
-                .long("force")
-                .help("When updating configuration, force the update."),
-        )
-        .arg(
-            Arg::with_name("debug")
-                .long("debug")
-                .help("Enable debug logging."),
-        )
-        .arg(
-            Arg::with_name("non-interactive")
-                .long("non-interactive")
-                .help("Force to run in non-interactive mode."),
-        )
-        .arg(
-            Arg::with_name("updates-only")
-                .long("updates-only")
-                .help("Only run if there are updates."),
-        )
+/// Configure your system, quickly!
+#[derive(Parser)]
+#[command(author = "John-John Tedro <udoprog@tedro.se>")]
+pub struct Opts {
+    /// Run using the given path as a configuration root.
+    #[arg(long, name = "dir")]
+    pub root: Option<PathBuf>,
+    /// Initialize against the given repository.
+    #[arg(long, name = "url")]
+    pub init: Option<String>,
+    /// Print paths used by quickcfg.
+    #[arg(long)]
+    pub paths: bool,
+    /// When updating configuration, force the update.
+    #[arg(long)]
+    pub force: bool,
+    /// Enable debug logging.
+    #[arg(long)]
+    pub debug: bool,
+    /// Force to run in non-interactive mode.
+    #[arg(long)]
+    pub non_interactive: bool,
+    /// Only run if there are updates.
+    #[arg(long)]
+    pub updates_only: bool,
 }
 
 /// Parse command-line options.
-pub fn opts() -> Result<Opts, Error> {
-    let matches = app().get_matches();
-
-    let mut opts = Opts::default();
-
-    opts.root = matches.value_of("root").map(PathBuf::from);
-    opts.init = matches.value_of("init").map(String::from);
-    opts.paths = matches.is_present("paths");
-    opts.force = matches.is_present("force");
-    opts.non_interactive = matches.is_present("non-interactive");
-    opts.updates_only = matches.is_present("updates-only");
-    opts.debug = matches.is_present("debug");
-
+pub fn opts() -> Result<Opts> {
+    let opts = Opts::try_parse()?;
     Ok(opts)
-}
-
-/// A set of parsed options.
-#[derive(Default)]
-pub struct Opts {
-    /// The root at which the project is running from.
-    pub root: Option<PathBuf>,
-    /// Initialize the project from the given repo.
-    pub init: Option<String>,
-    /// Print paths used by quickcfg.
-    pub paths: bool,
-    /// Force update.
-    pub force: bool,
-    /// Run in non-interactive mode.
-    non_interactive: bool,
-    /// Only run if there are updates to the repo.
-    pub updates_only: bool,
-    /// Enable debug logging.
-    pub debug: bool,
 }
 
 impl Opts {
     /// Find root directory based on options.
-    pub fn root(&self, base_dirs: Option<&BaseDirs>) -> Result<PathBuf, Error> {
+    pub fn root(&self, base_dirs: Option<&BaseDirs>) -> Result<PathBuf> {
         match self.root.as_ref() {
             Some(root) => Ok(root.to_owned()),
             None => match base_dirs {
@@ -100,7 +53,7 @@ impl Opts {
     }
 
     /// Prompt for yes/no.
-    pub fn prompt(&self, question: &str, default: bool) -> Result<bool, Error> {
+    pub fn prompt(&self, question: &str, default: bool) -> Result<bool> {
         use std::io::{self, Write};
 
         if self.non_interactive {
@@ -133,7 +86,7 @@ impl Opts {
     }
 
     /// Prompt for input.
-    pub fn input(&self, prompt: &str) -> Result<Option<String>, Error> {
+    pub fn input(&self, prompt: &str) -> Result<Option<String>> {
         use std::io::{self, Write};
 
         if self.non_interactive {

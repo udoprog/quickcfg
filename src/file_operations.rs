@@ -3,7 +3,6 @@
 use anyhow::{anyhow, bail, Context as _, Error};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
-use serde_yaml;
 use std::fs::File;
 use std::io;
 use std::path::Path;
