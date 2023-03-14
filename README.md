@@ -73,7 +73,7 @@ Every time you open a shell quickcfg will not check if your dotfiles are up-to-d
 
 You control how frequently by setting the `git_refresh` option in `quickcfg.yml`:
 
-```rust
+```no_test
 git_refresh: 3d
 ```
 
@@ -83,7 +83,7 @@ git_refresh: 3d
 
 Create a repository with a `quickcfg.yml` in its root:
 
-```rust
+```no_test
 git_refresh: 1d
 
 hierarchy:
@@ -92,6 +92,7 @@ hierarchy:
   - db/{distro}.yml
 
 systems:
+  # System to ensure that a set of packages are installed.
   - type: install
 ```
 
@@ -306,7 +307,8 @@ Any file being copied is then treated as a [`handlebars`] template.
 Any template file can make use of hierarchy data, by specifying their dependencies using
 a `quickcfg:` tag at the top of the file, like this:
 
-```rust
+```no_test
+# quickcfg: name, hobbies:array
 
 Hi, my name is {{name}}
 

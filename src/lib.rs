@@ -71,7 +71,7 @@
 //!
 //! You control how frequently by setting the `git_refresh` option in `quickcfg.yml`:
 //!
-//! ```
+//! ```no_test
 //! git_refresh: 3d
 //! ```
 //!
@@ -81,7 +81,7 @@
 //!
 //! Create a repository with a `quickcfg.yml` in its root:
 //!
-//! ```
+//! ```no_test
 //! git_refresh: 1d
 //!
 //! hierarchy:
@@ -305,7 +305,7 @@
 //! Any template file can make use of hierarchy data, by specifying their dependencies using
 //! a `quickcfg:` tag at the top of the file, like this:
 //!
-//! ```
+//! ```no_test
 //! # quickcfg: name, hobbies:array
 //!
 //! Hi, my name is {{name}}
