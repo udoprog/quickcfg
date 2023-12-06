@@ -40,7 +40,7 @@ filetime = "0.2.21"
 git2 = { version = "0.17.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3.9", features = ["shellapi", "winuser", "synchapi", "processthreadsapi"] }
+winapi = { version = "0.3.9", features = ["shellapi", "winuser", "synchapi", "processthreadsapi", "impl-default"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
