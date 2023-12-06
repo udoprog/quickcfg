@@ -9,7 +9,7 @@ documentation = "https://docs.rs/quickcfg"
 readme = "README.md"
 homepage = "https://github.com/udoprog/quickcfg"
 repository = "https://github.com/udoprog/quickcfg"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 keywords = ["cli"]
 categories = ["command-line-utilities"]
 
