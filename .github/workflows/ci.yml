@@ -16,14 +16,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: ['1.70', stable]
+        rust: ['1.74', stable]
         os: [ubuntu-latest, windows-latest]
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{matrix.rust}}
-    - run: cargo build --workspace --all-targets
+    - run: cargo build --workspace
     - run: cargo test --workspace --all-targets
       if: matrix.rust == 'stable'
     - run: cargo test --workspace --doc
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@1.70
+    - uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy
     - run: cargo clippy --workspace --all-features --all-targets -- -D warnings
