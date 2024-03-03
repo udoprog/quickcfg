@@ -24,17 +24,18 @@ pub fn runas(command: crate::Command) -> io::Result<i32> {
     let mut exit_code = 0;
 
     unsafe {
-        let mut info = shellapi::SHELLEXECUTEINFOW::default();
-
-        info.cbSize = std::mem::size_of::<shellapi::SHELLEXECUTEINFOW>() as DWORD;
-        info.fMask = shellapi::SEE_MASK_NOCLOSEPROCESS;
-        info.hwnd = ptr::null_mut();
-        info.lpVerb = operation.as_ptr();
-        info.lpFile = file.as_ptr();
-        info.lpParameters = params.as_ptr();
-        info.lpDirectory = ptr::null();
-        info.nShow = winuser::SW_SHOW;
-        info.hInstApp = ptr::null_mut();
+        let mut info = shellapi::SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<shellapi::SHELLEXECUTEINFOW>() as DWORD,
+            fMask: shellapi::SEE_MASK_NOCLOSEPROCESS,
+            hwnd: ptr::null_mut(),
+            lpVerb: operation.as_ptr(),
+            lpFile: file.as_ptr(),
+            lpParameters: params.as_ptr(),
+            lpDirectory: ptr::null(),
+            nShow: winuser::SW_SHOW,
+            hInstApp: ptr::null_mut(),
+            ..shellapi::SHELLEXECUTEINFOW::default()
+        };
 
         let result = shellapi::ShellExecuteExW(&mut info);
 
