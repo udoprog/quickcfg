@@ -1,7 +1,9 @@
 //! Utilities to process a set of units into a set of inter-dependent stages.
 
-use crate::unit::{Dependency, SystemUnit};
 use std::collections::HashSet;
+use std::mem;
+
+use crate::unit::{Dependency, SystemUnit};
 
 /// Discrete stage to run.
 /// Unless a stage is marked as `true` in thread_local, units in this stage can be run in parallel.
@@ -60,16 +62,14 @@ impl Stager {
             if !stage.is_empty() {
                 return Some(Stage {
                     thread_local: false,
-                    units: stage.drain(..).collect(),
+                    units: mem::take(stage),
                 });
             }
 
             if !thread_locals.is_empty() {
-                let units = thread_locals.drain(..).collect();
-
                 return Some(Stage {
                     thread_local: true,
-                    units,
+                    units: mem::take(thread_locals),
                 });
             }
 
@@ -82,7 +82,7 @@ impl Stager {
     /// Mark the specified unit as successfully processed.
     pub fn mark(&mut self, unit: SystemUnit) {
         log::trace!("Mark: {}", unit);
-        self.provided.extend(unit.provides.into_iter());
+        self.provided.extend(unit.provides);
         self.provided.insert(Dependency::Unit(unit.id));
     }
 

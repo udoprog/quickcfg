@@ -304,7 +304,6 @@ impl<'a> FileSystem<'a> {
     /// assert_eq!(FileSystem::path_relative_from(&quux, &baz), Some("../quux".into()));
     /// assert_eq!(FileSystem::path_relative_from(&baz, &quux), Some("../baz".into()));
     /// assert_eq!(FileSystem::path_relative_from(&bar, &quux), Some("../".into()));
-    ///
     /// ```
     pub fn path_relative_from(path: &Path, base: &Path) -> Option<PathBuf> {
         // Adapted from:
@@ -322,7 +321,7 @@ impl<'a> FileSystem<'a> {
         let mut ita = path.components();
         let mut itb = base.components();
 
-        let mut comps: Vec<Component> = vec![];
+        let mut comps = Vec::new();
 
         loop {
             match (ita.next(), itb.next()) {
@@ -334,8 +333,8 @@ impl<'a> FileSystem<'a> {
                 }
                 (None, _) => comps.push(Component::ParentDir),
                 (Some(a), Some(b)) if comps.is_empty() && a == b => (),
-                (Some(a), Some(b)) if b == Component::CurDir => comps.push(a),
-                (Some(_), Some(b)) if b == Component::ParentDir => return None,
+                (Some(a), Some(Component::CurDir)) => comps.push(a),
+                (Some(_), Some(Component::ParentDir)) => return None,
                 (Some(a), Some(_)) => {
                     comps.push(Component::ParentDir);
                     for _ in itb {
