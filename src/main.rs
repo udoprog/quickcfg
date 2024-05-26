@@ -21,7 +21,7 @@ fn report_error(e: Error) {
     if let Some(e) = it.next() {
         eprintln!("Error: {}", e);
 
-        #[cfg(feature = "nightly")]
+        #[cfg(quickcfg_nightly)]
         {
             if let Some(bt) = e.backtrace() {
                 eprintln!("{}", bt);
@@ -32,7 +32,7 @@ fn report_error(e: Error) {
     for e in it {
         eprintln!("Caused by: {}", e);
 
-        #[cfg(feature = "nightly")]
+        #[cfg(quickcfg_nightly)]
         {
             if let Some(bt) = e.backtrace() {
                 eprintln!("{}", bt);
