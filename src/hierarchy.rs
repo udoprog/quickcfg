@@ -133,7 +133,7 @@ pub fn load<'a>(
     it: impl IntoIterator<Item = &'a Template>,
     root: &Path,
     facts: &Facts,
-    environment: impl Copy + e::Environment,
+    environment: impl e::Environment,
 ) -> Result<Data> {
     let mut stages = Vec::new();
     let mut last_modified = None;

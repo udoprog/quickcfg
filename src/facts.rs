@@ -78,10 +78,10 @@ impl Facts {
     }
 
     /// Get the specified fact, if present.
-    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&str>
+    pub fn get<Q>(&self, k: &Q) -> Option<&str>
     where
         String: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: ?Sized + Hash + Eq,
     {
         self.0.get(k).map(|s| s.as_str())
     }

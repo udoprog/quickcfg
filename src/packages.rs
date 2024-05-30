@@ -31,7 +31,7 @@ pub struct Provider {
 impl Provider {
     /// Access the default package manager if it is available.
     pub fn default(&self) -> Option<Arc<dyn PackageManager>> {
-        self.default.as_ref().map(Arc::clone)
+        self.default.clone()
     }
 
     /// Look up a package manager by name.
