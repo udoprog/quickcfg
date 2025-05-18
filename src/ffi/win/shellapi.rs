@@ -45,8 +45,8 @@ pub fn runas(command: crate::Command) -> io::Result<i32> {
 
         match WaitForSingleObject(info.hProcess, INFINITE) {
             WAIT_OBJECT_0 => (),
-            WAIT_ABANDONED => return Err(io::Error::new(io::ErrorKind::Other, "wait abandoned")),
-            WAIT_TIMEOUT => return Err(io::Error::new(io::ErrorKind::Other, "wait timed out")),
+            WAIT_ABANDONED => return Err(io::Error::other("wait abandoned")),
+            WAIT_TIMEOUT => return Err(io::Error::other("wait timed out")),
             _ => return Err(io::Error::last_os_error()),
         }
 

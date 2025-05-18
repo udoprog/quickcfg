@@ -704,7 +704,7 @@ impl RunOnce {
                 let status = cmd.status()?;
                 status
                     .code()
-                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no status code"))?
+                    .ok_or_else(|| io::Error::other("no status code"))?
             })
         }
 
@@ -740,7 +740,7 @@ impl RunOnce {
             let status = cmd.status()?;
             let code = status
                 .code()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no status code"))?;
+                .ok_or_else(|| io::Error::other("no status code"))?;
             Ok(code)
         }
     }

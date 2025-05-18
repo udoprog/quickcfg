@@ -161,12 +161,10 @@ impl Command {
 
         let output = Output {
             status: output.status,
-            stdout: String::from_utf8(output.stdout).map_err(|_| {
-                io::Error::new(io::ErrorKind::Other, "Cannot decode stdout as utf-8")
-            })?,
-            stderr: String::from_utf8(output.stderr).map_err(|_| {
-                io::Error::new(io::ErrorKind::Other, "Cannot decode stderr as utf-8")
-            })?,
+            stdout: String::from_utf8(output.stdout)
+                .map_err(|_| io::Error::other("Cannot decode stdout as utf-8"))?,
+            stderr: String::from_utf8(output.stderr)
+                .map_err(|_| io::Error::other("Cannot decode stderr as utf-8"))?,
         };
 
         Ok(output)

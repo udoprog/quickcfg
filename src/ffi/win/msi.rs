@@ -83,8 +83,8 @@ pub fn msi_get_product_info(
         errno => return Err(io::Error::from_raw_os_error(errno as i32)),
     }
 
-    let value = String::from_utf16(&value[..(value_len as usize)])
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let value =
+        String::from_utf16(&value[..(value_len as usize)]).map_err(|e| io::Error::other(e))?;
     Ok(Some(value))
 }
 
@@ -116,8 +116,7 @@ pub fn msi_enum_products() -> io::Result<Vec<MsiPackage>> {
             errno => return Err(io::Error::from_raw_os_error(errno as i32)),
         }
 
-        let product_code =
-            String::from_utf16(&name[..38]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let product_code = String::from_utf16(&name[..38]).map_err(|e| io::Error::other(e))?;
 
         let name = msi_get_product_info(&product_code, context, "PackageName")?;
         let version = msi_get_product_info(&product_code, context, "VersionString")?;
