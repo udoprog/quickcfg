@@ -67,7 +67,7 @@ impl Opts {
         let p = if default { "[Y/n]" } else { "[y/N]" };
 
         loop {
-            write!(stdout, "{} {} ", question, p)?;
+            write!(stdout, "{question} {p} ")?;
             stdout.flush()?;
 
             input.clear();
@@ -96,7 +96,7 @@ impl Opts {
         let stdin = io::stdin();
         let mut stdout = io::stdout();
 
-        write!(stdout, "{} ", prompt)?;
+        write!(stdout, "{prompt} ")?;
         stdout.flush()?;
 
         let mut input = String::new();

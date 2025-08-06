@@ -19,10 +19,10 @@ impl fmt::Display for Template {
 
         for part in &self.parts {
             match *part {
-                Protocol(ref proto) => write!(fmt, "{}://", proto)?,
+                Protocol(ref proto) => write!(fmt, "{proto}://")?,
                 Static(ref string) => string.fmt(fmt)?,
-                Variable(ref var) => write!(fmt, "{{{}}}", var)?,
-                Environ(ref env) => write!(fmt, "${}", env)?,
+                Variable(ref var) => write!(fmt, "{{{var}}}")?,
+                Environ(ref env) => write!(fmt, "${env}")?,
             }
         }
 

@@ -54,7 +54,7 @@ impl GitSync {
 
         let id = self.id.as_ref().ok_or_else(|| anyhow!("missing `id`"))?;
 
-        let id = format!("git-sync/{}", id);
+        let id = format!("git-sync/{id}");
 
         let mut units = Vec::new();
 

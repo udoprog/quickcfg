@@ -122,7 +122,7 @@ impl Install {
 impl fmt::Display for Install {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.provider.as_ref() {
-            Some(provider) => write!(fmt, "install packages using provider `{}`", provider),
+            Some(provider) => write!(fmt, "install packages using provider `{provider}`"),
             None => write!(fmt, "install packages using primary provider"),
         }
     }

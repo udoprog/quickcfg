@@ -19,7 +19,7 @@ fn report_error(e: Error) {
     let mut it = e.chain();
 
     if let Some(e) = it.next() {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
 
         #[cfg(quickcfg_nightly)]
         {
@@ -30,7 +30,7 @@ fn report_error(e: Error) {
     }
 
     for e in it {
-        eprintln!("Caused by: {}", e);
+        eprintln!("Caused by: {e}");
 
         #[cfg(quickcfg_nightly)]
         {
