@@ -81,7 +81,7 @@ impl Stager {
 
     /// Mark the specified unit as successfully processed.
     pub fn mark(&mut self, unit: SystemUnit) {
-        log::trace!("Mark: {}", unit);
+        log::trace!("Mark: {unit}");
         self.provided.extend(unit.provides);
         self.provided.insert(Dependency::Unit(unit.id));
     }

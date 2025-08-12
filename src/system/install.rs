@@ -70,7 +70,7 @@ impl Install {
 
         // test if stored hash is stale.
         if state.is_hash_fresh(&id, &all_packages)? {
-            log::trace!("Skipping `{}` since hash is fresh", id);
+            log::trace!("Skipping `{id}` since hash is fresh");
             return Ok(units);
         }
 
@@ -85,7 +85,7 @@ impl Install {
                 // no package manager.
                 match provider {
                     Some(provider) => {
-                        log::warn!("No package manager for provider `{}` found", provider)
+                        log::warn!("No package manager for provider `{provider}` found")
                     }
                     None => log::warn!("No primary package manager found"),
                 }

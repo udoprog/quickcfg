@@ -80,7 +80,7 @@ fn by_distro(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
         "debian" => test(debian::PackageManager::new()),
         "fedora" => test(fedora::PackageManager::new()),
         distro => {
-            warn!("no package integration for distro: {}", distro);
+            warn!("no package integration for distro: {distro}");
             Ok(None)
         }
     }
@@ -97,7 +97,7 @@ fn by_os(facts: &Facts) -> Result<Option<Arc<dyn PackageManager>>, Error> {
     match os {
         "windows" => test(winget::PackageManager::new()),
         os => {
-            warn!("no package integration for os: {}", os);
+            warn!("no package integration for os: {os}");
             Ok(None)
         }
     }
