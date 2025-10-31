@@ -6,7 +6,7 @@ use crate::{
     opts::Opts,
     unit::{CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator},
 };
-use anyhow::{anyhow, bail, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow, bail};
 use fxhash::FxHashMap;
 use std::fs;
 use std::io;
@@ -131,10 +131,10 @@ impl<'a> FileSystem<'a> {
             link,
         });
 
-        if let Some(parent) = path.parent() {
-            if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent)?);
-            }
+        if let Some(parent) = path.parent()
+            && !parent.is_dir()
+        {
+            unit.dependencies.push(self.dir_dependency(parent)?);
         }
 
         unit.provides.push(self.file_dependency(path)?);
@@ -175,10 +175,10 @@ impl<'a> FileSystem<'a> {
             })
         };
 
-        if let Some(parent) = to.parent() {
-            if !parent.is_dir() {
-                unit.dependencies.push(self.dir_dependency(parent)?);
-            }
+        if let Some(parent) = to.parent()
+            && !parent.is_dir()
+        {
+            unit.dependencies.push(self.dir_dependency(parent)?);
         }
 
         unit.provides.push(self.file_dependency(to)?);

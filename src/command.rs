@@ -1,6 +1,6 @@
 //! Helper to run external commands.
 
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;

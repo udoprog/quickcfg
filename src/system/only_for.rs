@@ -2,7 +2,7 @@ use crate::{
     environment as e,
     system::{System, SystemInput, SystemUnit, Translation},
 };
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use std::fmt;
 
 system_struct! {

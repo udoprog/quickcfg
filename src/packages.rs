@@ -12,7 +12,7 @@ mod rustup_toolchains;
 mod winget;
 
 use crate::facts::{self, Facts};
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use log::warn;
 use std::fmt;
 use std::sync::Arc;
@@ -36,10 +36,10 @@ impl Provider {
 
     /// Look up a package manager by name.
     pub fn get(&self, name: &str) -> Result<Option<Arc<dyn PackageManager>>, Error> {
-        if let Some(default) = self.default.as_ref() {
-            if default.name() == name {
-                return Ok(Some(Arc::clone(default)));
-            }
+        if let Some(default) = self.default.as_ref()
+            && default.name() == name
+        {
+            return Ok(Some(Arc::clone(default)));
         }
 
         match name {

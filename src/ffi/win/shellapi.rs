@@ -76,7 +76,7 @@ where
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "argument is not valid UTF-8",
-                ))
+                ));
             }
         };
 

@@ -1,15 +1,14 @@
-use anyhow::{anyhow, bail, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow, bail};
 use directories::BaseDirs;
 
 use quickcfg::{
-    environment as e,
+    Config, DiskState, FileSystem, Load, Save, State, Timestamp, environment as e,
     facts::Facts,
     git, hierarchy,
     opts::{self, Opts},
     packages, stage,
     system::{self, SystemInput},
     unit::{self, Unit, UnitAllocator, UnitInput},
-    Config, DiskState, FileSystem, Load, Save, State, Timestamp,
 };
 use std::collections::HashMap;
 use std::fs;

@@ -1,6 +1,6 @@
 //! Dealing with the hierarchy of data.
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 use std::env;
@@ -9,7 +9,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::{environment as e, facts::Facts, Template};
+use crate::{Template, environment as e, facts::Facts};
 
 const HEADER: &str = "quickcfg:";
 
@@ -30,46 +30,93 @@ impl Data {
         }
     }
 
+    /// Load all matching values from all elements in the hierarchy as a
+    /// flattened array.
+    pub fn load_array<T>(&self, key: &str) -> Result<Vec<T>>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let mut all = Vec::new();
+
+        self.load::<Value>(key, |v| {
+            match v {
+                Value::Sequence(values) => {
+                    for value in values {
+                        let value = T::deserialize(value)?;
+                        all.push(value);
+                    }
+                }
+                _ => {
+                    all.push(T::deserialize(v)?);
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok(all)
+    }
+
+    /// Load the first matching value from the hierarchy.
+    pub fn load_first<T>(&self, key: &str) -> Result<Option<T>>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let mut loaded = None;
+
+        self.load::<T>(key, |v| {
+            if loaded.is_none() {
+                loaded = Some(T::deserialize(v.clone())?);
+            }
+
+            Ok(())
+        })?;
+
+        Ok(loaded)
+    }
+
+    /// Load the given key, if it doesn't exist, use a default value.
+    pub fn load_first_or_default<T>(&self, key: &str) -> Result<T>
+    where
+        T: Default + for<'de> Deserialize<'de>,
+    {
+        self.load_first(key).map(|v| v.unwrap_or_default())
+    }
+
     /// Load the given key.
-    pub fn load<'de, T>(&self, key: &str) -> Result<Option<T>>
+    fn load<T>(&self, key: &str, mut found: impl FnMut(&Value) -> Result<()>) -> Result<()>
     where
-        T: Deserialize<'de>,
+        T: for<'de> Deserialize<'de>,
     {
-        let key = serde_yaml::Value::String(key.to_string());
-
         for m in &self.hierarchy {
-            if let Some(value) = m.get(&key) {
-                return Ok(Some(T::deserialize(value.clone())?));
+            let mut it = key.split('.');
+            let last = it.next_back();
+            let mut value = Some::<&Mapping>(m);
+
+            for step in it {
+                let Some(m) = value.take() else {
+                    break;
+                };
+
+                let Some(next) = m.get(step) else {
+                    break;
+                };
+
+                let Some(next) = next.as_mapping() else {
+                    break;
+                };
+
+                value = Some(next);
+            }
+
+            if let (Some(key), Some(m)) = (last, value)
+                && let Some(value) = m.get(key)
+            {
+                found(value)?;
             }
         }
 
-        Ok(None)
-    }
-
-    /// Load the given key, if it doesn't exist, use a default value.
-    pub fn load_or_default<'de, T>(&self, key: &str) -> Result<T>
-    where
-        T: Default + Deserialize<'de>,
-    {
-        self.load(key).map(|v| v.unwrap_or_default())
-    }
-
-    /// Load the given key, if it doesn't exist, use a default value.
-    pub fn load_array<'de, T>(&self, key: &str) -> Result<Vec<T>>
-    where
-        T: Deserialize<'de>,
-    {
-        let key = serde_yaml::Value::String(key.to_string());
-
-        let mut out = Vec::new();
-
-        for m in &self.hierarchy {
-            if let Some(value) = m.get(&key) {
-                out.extend(<Vec<T> as Deserialize>::deserialize(value.clone())?);
-            }
-        }
-
-        Ok(out)
+        Ok(())
     }
 
     /// Load data based on a file spec.
@@ -111,14 +158,37 @@ impl Data {
                         Value::String(value)
                     }
                     None => self
-                        .load::<Value>(key)?
+                        .load_first::<Value>(key)?
                         .ok_or_else(|| anyhow!("missing key `{}` in hierarchy", key))?,
                     Some(other) => {
                         bail!("bad part in specification `{}`: bad type `{}`", part, other);
                     }
                 };
 
-                m.insert(Value::String(key.to_string()), value);
+                let mut it = key.split('.');
+                let last = it.next_back();
+
+                let mut current = &mut m;
+
+                for step in it {
+                    let value = current
+                        .entry(Value::String(step.to_string()))
+                        .or_insert_with(|| Value::Mapping(Mapping::new()));
+
+                    match value {
+                        Value::Mapping(map) => {
+                            current = map;
+                        }
+                        value => bail!(
+                            "expected mapping as defined by key `{}` but found {value:?}",
+                            key
+                        ),
+                    }
+                }
+
+                if let Some(last) = last {
+                    current.insert(Value::String(last.to_string()), value);
+                }
             }
 
             break;
@@ -204,17 +274,19 @@ mod tests {
         let data = Data::new(None, vec![layer1, layer2]);
 
         assert_eq!(
-            data.load::<String>("foo").expect("layer1 key as string"),
+            data.load_first::<String>("foo")
+                .expect("layer1 key as string"),
             Some("foo value".into()),
         );
 
         assert_eq!(
-            data.load::<String>("bar").expect("layer2 key as string"),
+            data.load_first::<String>("bar")
+                .expect("layer2 key as string"),
             Some("bar value".into()),
         );
 
         assert_eq!(
-            data.load_or_default::<String>("missing")
+            data.load_first_or_default::<String>("missing")
                 .expect("missing key to default"),
             "",
         );

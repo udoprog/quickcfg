@@ -1,7 +1,7 @@
 //! Unix-specific implementations.
 
 use crate::unit::{AddMode, Symlink};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 

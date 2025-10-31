@@ -1,6 +1,6 @@
 //! Git integration using libgit2
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use git2::{ObjectType, Oid, Repository, ResetType};
 use std::fmt;
 use std::path::{Path, PathBuf};

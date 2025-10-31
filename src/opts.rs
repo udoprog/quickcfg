@@ -1,6 +1,6 @@
 //! Set up options.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use directories::BaseDirs;
 use std::path::PathBuf;

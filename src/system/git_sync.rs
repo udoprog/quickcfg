@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{GitClone, GitUpdate, SystemUnit},
 };
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::fmt;
 use std::time::Duration;
 

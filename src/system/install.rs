@@ -3,7 +3,7 @@ use crate::{
     system::SystemInput,
     unit::{self, SystemUnit},
 };
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
@@ -66,7 +66,7 @@ impl Install {
             },
         };
 
-        all_packages.extend(data.load_or_default::<Vec<String>>(&key)?);
+        all_packages.extend(data.load_first_or_default::<Vec<String>>(&key)?);
 
         // test if stored hash is stale.
         if state.is_hash_fresh(&id, &all_packages)? {

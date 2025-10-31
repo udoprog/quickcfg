@@ -1,5 +1,5 @@
 //! Helpers for accessing environment variables.
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use std::collections::HashMap;
 use std::env;
 

@@ -1,6 +1,6 @@
 //! Utilities for reading and writing serde types to and from the filesystem.
 
-use anyhow::{anyhow, bail, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow, bail};
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use std::fs::File;

@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{AddMode, Dependency, Download, Mode, RunOnce, SystemUnit},
 };
-use anyhow::{anyhow, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow};
 use std::fmt;
 
 system_struct! {

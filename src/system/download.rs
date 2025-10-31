@@ -4,7 +4,7 @@ use crate::{
     template::Template,
     unit::{self, Dependency},
 };
-use anyhow::{anyhow, bail, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow, bail};
 use std::fmt;
 
 system_struct! {

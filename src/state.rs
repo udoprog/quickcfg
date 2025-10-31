@@ -1,7 +1,7 @@
 //! Model for state file.
 
-use crate::config::Config;
 use crate::Timestamp;
+use crate::config::Config;
 use anyhow::Error;
 use fxhash::FxHasher64;
 use serde::{Deserialize, Serialize};

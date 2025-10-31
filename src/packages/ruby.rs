@@ -1,7 +1,7 @@
 //! Packages abstraction for Ruby.
 
 use crate::{command, os, packages::Package};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::ffi::OsStr;
 use std::io;
 

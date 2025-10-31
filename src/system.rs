@@ -1,8 +1,8 @@
 //! Things to do.
 
 use crate::{
-    environment as e, git, packages, state::State, Data, Facts, FileSystem, Opts, SystemUnit,
-    Timestamp, UnitAllocator, UnitId,
+    Data, Facts, FileSystem, Opts, SystemUnit, Timestamp, UnitAllocator, UnitId, environment as e,
+    git, packages, state::State,
 };
 use anyhow::Error;
 use directories::BaseDirs;

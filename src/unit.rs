@@ -1,15 +1,15 @@
 //! A unit of work. Does a single thing and DOES IT WELL.
 
 use crate::{
-    git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager, state::State,
-    FileSystem, Timestamp,
+    FileSystem, Timestamp, git::GitSystem, hierarchy::Data, os, packages, packages::PackageManager,
+    state::State,
 };
-use anyhow::{anyhow, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
 use thiserror::Error;
 
@@ -209,7 +209,7 @@ impl fmt::Display for CreateDir {
 impl CreateDir {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
         use std::fs;
-        let CreateDir(ref dir) = self;
+        let CreateDir(dir) = self;
         log::info!("creating dir: {}", dir.display());
         fs::create_dir(dir)?;
         Ok(())

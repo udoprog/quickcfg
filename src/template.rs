@@ -1,6 +1,6 @@
 //! Model for template variables.
 use crate::environment::Environment;
-use anyhow::{anyhow, bail, Error};
+use anyhow::{Error, anyhow, bail};
 use directories::BaseDirs;
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::de;
