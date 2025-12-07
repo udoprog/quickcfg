@@ -38,7 +38,7 @@ impl Data {
     {
         let mut all = Vec::new();
 
-        self.load::<Value>(key, |v| {
+        self.load(key, |v| {
             match v {
                 Value::Sequence(values) => {
                     for value in values {
@@ -64,7 +64,7 @@ impl Data {
     {
         let mut loaded = None;
 
-        self.load::<T>(key, |v| {
+        self.load(key, |v| {
             if loaded.is_none() {
                 loaded = Some(T::deserialize(v.clone())?);
             }
@@ -84,10 +84,7 @@ impl Data {
     }
 
     /// Load the given key.
-    fn load<T>(&self, key: &str, mut found: impl FnMut(&Value) -> Result<()>) -> Result<()>
-    where
-        T: for<'de> Deserialize<'de>,
-    {
+    fn load(&self, key: &str, mut found: impl FnMut(&Value) -> Result<()>) -> Result<()> {
         for m in &self.hierarchy {
             let mut it = key.split('.');
             let last = it.next_back();
