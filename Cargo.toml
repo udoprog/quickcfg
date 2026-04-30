@@ -13,12 +13,12 @@ license = "MIT OR Apache-2.0"
 keywords = ["cli"]
 categories = ["command-line-utilities"]
 
+[features]
+default = ["git2"]
+
 [[bin]]
 name = "qc"
 path = "src/main.rs"
-
-[badges]
-travis-ci = { repository = "udoprog/quickcfg" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(quickcfg_nightly)'] }
@@ -38,15 +38,14 @@ handlebars = "6.3.2"
 directories = "6.0.0"
 fxhash = "0.2.1"
 humantime = "2.1.0"
-reqwest = { version = "0.12.24", features = ["blocking"] }
+reqwest = { version = "0.13.3", features = ["blocking"] }
 filetime = "0.2.21"
 git2 = { version = "0.20.2", optional = true }
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3.9", features = ["shellapi", "winuser", "synchapi", "processthreadsapi", "winerror", "impl-default"] }
-
-[target.'cfg(windows)'.build-dependencies]
-winres = "0.1.12"
-
-[features]
-default = ["git2"]
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.61.2"
+features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_ApplicationInstallationAndServicing",
+    "Win32_System_Registry",
+]

@@ -1,44 +1,16 @@
+use core::mem::MaybeUninit;
+
 use std::ffi::OsStr;
 use std::io;
 use std::os::windows::ffi::OsStrExt as _;
 use std::ptr;
-use winapi::shared::{
-    minwindef::{DWORD, LPDWORD, UINT},
-    ntdef::{LPCWSTR, LPWSTR, WCHAR},
-    winerror,
+
+use windows_sys::Win32::Foundation::{
+    ERROR_NO_MORE_ITEMS, ERROR_UNKNOWN_PRODUCT, ERROR_UNKNOWN_PROPERTY,
 };
-
-winapi::ENUM! {enum MSIINSTALLCONTEXT {
-    MSIINSTALLCONTEXT_FIRSTVISIBLE   =  0,  // product visible to the current user
-    MSIINSTALLCONTEXT_NONE           =  0,  // Invalid context for a product
-    MSIINSTALLCONTEXT_USERMANAGED    =  1,  // user managed install context
-    MSIINSTALLCONTEXT_USERUNMANAGED  =  2,  // user non-managed context
-    MSIINSTALLCONTEXT_MACHINE        =  4,  // per-machine context
-    MSIINSTALLCONTEXT_ALL            =  0b111, // All contexts. OR of all valid values
-    MSIINSTALLCONTEXT_ALLUSERMANAGED =  8,  // all user-managed contexts
-}}
-
-extern "system" {
-    fn MsiEnumProductsExW(
-        szProductCode: LPCWSTR,
-        szUserSid: LPCWSTR,
-        dwContext: DWORD,
-        dwIndex: DWORD,
-        szInstalledProductCode: *mut [WCHAR; 39],
-        pdwInstalledContext: *mut MSIINSTALLCONTEXT,
-        szSid: LPWSTR,
-        pcchSid: LPDWORD,
-    ) -> UINT;
-
-    fn MsiGetProductInfoExW(
-        szProductCode: LPCWSTR,
-        szUserSid: LPCWSTR,
-        dwContext: MSIINSTALLCONTEXT,
-        szProperty: LPCWSTR,
-        szValue: LPWSTR,
-        pcchValue: LPDWORD,
-    ) -> UINT;
-}
+use windows_sys::Win32::System::ApplicationInstallationAndServicing::MSIINSTALLCONTEXT_ALL;
+use windows_sys::Win32::System::ApplicationInstallationAndServicing::MsiEnumProductsExW;
+use windows_sys::Win32::System::ApplicationInstallationAndServicing::MsiGetProductInfoExW;
 
 #[derive(Debug)]
 pub struct MsiPackage {
@@ -49,7 +21,7 @@ pub struct MsiPackage {
 
 pub fn msi_get_product_info(
     product_code: &str,
-    context: u32,
+    context: i32,
     property: &str,
 ) -> io::Result<Option<String>> {
     let product_code = OsStr::new(product_code)
@@ -78,8 +50,8 @@ pub fn msi_get_product_info(
 
     match out {
         0 => (),
-        winerror::ERROR_UNKNOWN_PRODUCT => return Ok(None),
-        winerror::ERROR_UNKNOWN_PROPERTY => return Ok(None),
+        ERROR_UNKNOWN_PRODUCT => return Ok(None),
+        ERROR_UNKNOWN_PROPERTY => return Ok(None),
         errno => return Err(io::Error::from_raw_os_error(errno as i32)),
     }
 
@@ -93,7 +65,7 @@ pub fn msi_enum_products() -> io::Result<Vec<MsiPackage>> {
 
     for index in 0.. {
         let mut name = [0u16; 39];
-        let mut context = MSIINSTALLCONTEXT_NONE;
+        let mut context = MaybeUninit::uninit();
         let mut sid = vec![0u16; 128];
         let mut sid_size = 128;
 
@@ -101,10 +73,10 @@ pub fn msi_enum_products() -> io::Result<Vec<MsiPackage>> {
             MsiEnumProductsExW(
                 ptr::null(),
                 ptr::null(),
-                MSIINSTALLCONTEXT_ALL,
+                MSIINSTALLCONTEXT_ALL as u32,
                 index,
-                &mut name,
-                &mut context,
+                name.as_mut_ptr(),
+                context.as_mut_ptr(),
                 sid.as_mut_ptr(),
                 &mut sid_size,
             )
@@ -112,10 +84,11 @@ pub fn msi_enum_products() -> io::Result<Vec<MsiPackage>> {
 
         match out {
             0 => (),
-            winerror::ERROR_NO_MORE_ITEMS => break,
+            ERROR_NO_MORE_ITEMS => break,
             errno => return Err(io::Error::from_raw_os_error(errno as i32)),
         }
 
+        let context = unsafe { context.assume_init() };
         let product_code = String::from_utf16(&name[..38]).map_err(|e| io::Error::other(e))?;
 
         let name = msi_get_product_info(&product_code, context, "PackageName")?;

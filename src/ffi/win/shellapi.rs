@@ -1,15 +1,14 @@
+use core::mem;
+
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::os::windows::ffi::OsStrExt as _;
 use std::ptr;
-use winapi::shared::minwindef::DWORD;
-use winapi::shared::minwindef::TRUE;
-use winapi::shared::winerror::WAIT_TIMEOUT;
-use winapi::um::processthreadsapi::GetExitCodeProcess;
-use winapi::um::shellapi;
-use winapi::um::synchapi::WaitForSingleObject;
-use winapi::um::winbase::{INFINITE, WAIT_ABANDONED, WAIT_OBJECT_0};
-use winapi::um::winuser;
+
+use windows_sys::Win32::Foundation::{TRUE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows_sys::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
+use windows_sys::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
+use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW;
 
 fn wide_string(s: impl AsRef<OsStr>) -> Vec<u16> {
     s.as_ref().encode_wide().chain(Some(0)).collect::<Vec<_>>()
@@ -24,20 +23,20 @@ pub fn runas(command: crate::Command) -> io::Result<i32> {
     let mut exit_code = 0;
 
     unsafe {
-        let mut info = shellapi::SHELLEXECUTEINFOW {
-            cbSize: std::mem::size_of::<shellapi::SHELLEXECUTEINFOW>() as DWORD,
-            fMask: shellapi::SEE_MASK_NOCLOSEPROCESS,
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS,
             hwnd: ptr::null_mut(),
             lpVerb: operation.as_ptr(),
             lpFile: file.as_ptr(),
             lpParameters: params.as_ptr(),
             lpDirectory: ptr::null(),
-            nShow: winuser::SW_SHOW,
+            nShow: SW_SHOW,
             hInstApp: ptr::null_mut(),
-            ..shellapi::SHELLEXECUTEINFOW::default()
+            ..SHELLEXECUTEINFOW::default()
         };
 
-        let result = shellapi::ShellExecuteExW(&mut info);
+        let result = ShellExecuteExW(&mut info);
 
         if result != TRUE {
             return Err(io::Error::last_os_error());
