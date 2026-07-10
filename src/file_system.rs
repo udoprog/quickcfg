@@ -1,10 +1,12 @@
 //! Thread-safe utilities for creating files and directories.
 //! use std::collections::HashMap;
 //!
-use crate::{
-    hierarchy::Data,
-    opts::Opts,
-    unit::{CopyFile, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit, UnitAllocator},
+use crate::hierarchy::Data;
+use crate::opts::Opts;
+use crate::os;
+use crate::unit::{
+    CopyFile, CopyPermissions, CopyTemplate, CreateDir, Dependency, Symlink, SystemUnit,
+    UnitAllocator,
 };
 use anyhow::{Context as _, Error, anyhow, bail};
 use fxhash::FxHashMap;
@@ -157,7 +159,8 @@ impl<'a> FileSystem<'a> {
     ) -> Result<Option<SystemUnit>, Error> {
         let from_modified = match self.should_copy_file(&from_meta, to, to_meta, template)? {
             Some(modified) => modified,
-            None => return Ok(None),
+            // The contents are up to date, but the permissions might still have drifted.
+            None => return self.copy_permissions(from, &from_meta, to, to_meta),
         };
 
         let mut unit = if template {
@@ -180,6 +183,33 @@ impl<'a> FileSystem<'a> {
         {
             unit.dependencies.push(self.dir_dependency(parent)?);
         }
+
+        unit.provides.push(self.file_dependency(to)?);
+        Ok(Some(unit))
+    }
+
+    /// Set up a unit to sync permissions onto an existing destination file, if
+    /// they differ from the source.
+    fn copy_permissions(
+        &self,
+        from: &Path,
+        from_meta: &fs::Metadata,
+        to: &Path,
+        to_meta: Option<&fs::Metadata>,
+    ) -> Result<Option<SystemUnit>, Error> {
+        // A missing destination is always copied wholesale.
+        let Some(to_meta) = to_meta else {
+            return Ok(None);
+        };
+
+        if !os::permissions_differ(from_meta, to_meta) {
+            return Ok(None);
+        }
+
+        let mut unit = self.allocator.unit(CopyPermissions {
+            from: from.to_owned(),
+            to: to.to_owned(),
+        });
 
         unit.provides.push(self.file_dependency(to)?);
         Ok(Some(unit))

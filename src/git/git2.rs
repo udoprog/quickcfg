@@ -1,6 +1,6 @@
 //! Git integration using libgit2
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail};
 use git2::{ObjectType, Oid, Repository, ResetType};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -64,7 +64,7 @@ impl Git2 {
             .repo
             .head()?
             .name()
-            .ok_or_else(|| anyhow!("could not find HEAD"))?
+            .context("could not find HEAD")?
             .to_owned())
     }
 }

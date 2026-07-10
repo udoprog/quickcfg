@@ -113,6 +113,7 @@ unit![
     FromDb,
     CopyFile,
     CopyTemplate,
+    CopyPermissions,
     Symlink,
     CreateDir,
     Install,
@@ -246,8 +247,7 @@ impl fmt::Display for CopyFile {
 
 impl CopyFile {
     fn apply(&self, _: UnitInput) -> Result<(), Error> {
-        use std::fs::File;
-        use std::io;
+        use std::fs;
 
         let CopyFile {
             ref from,
@@ -256,7 +256,8 @@ impl CopyFile {
         } = *self;
 
         log::info!("{} -> {}", from.display(), to.display());
-        io::copy(&mut File::open(from)?, &mut File::create(to)?)?;
+        // NB: copies the permission bits along with the contents.
+        fs::copy(from, to)?;
         // make sure timestamp is in sync.
         FileSystem::touch(to, from_modified)
     }
@@ -346,7 +347,8 @@ impl CopyTemplate {
         if to_exists && read_state.is_hash_fresh(&id, hash)? {
             // Nothing about the template would change, only update the modified time of the file.
             log::info!("touching {}", to.display());
-            // only need to update timestamp.
+            // permissions might still have drifted, so re-sync them.
+            os::copy_permissions(from, to)?;
             return FileSystem::touch(to, from_modified);
         }
 
@@ -366,6 +368,7 @@ impl CopyTemplate {
 
         log::info!("{} -> {} (template)", from.display(), to.display());
         File::create(to)?.write_all(&out)?;
+        os::copy_permissions(from, to)?;
         state.touch_hash(&id, hash)?;
         return FileSystem::touch(to, from_modified);
 
@@ -390,6 +393,44 @@ impl CopyTemplate {
 impl From<CopyTemplate> for Unit {
     fn from(value: CopyTemplate) -> Unit {
         Unit::CopyTemplate(value)
+    }
+}
+
+/// The configuration for a unit to sync the permissions of a single file.
+///
+/// This is used when the contents of the destination are already up to date,
+/// but its permissions have drifted from the source.
+#[derive(Debug, Hash)]
+pub struct CopyPermissions {
+    /// The source file.
+    pub from: PathBuf,
+    /// The destination file.
+    pub to: PathBuf,
+}
+
+impl fmt::Display for CopyPermissions {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            fmt,
+            "copy permissions {} -> {}",
+            self.from.display(),
+            self.to.display()
+        )
+    }
+}
+
+impl CopyPermissions {
+    fn apply(&self, _: UnitInput) -> Result<(), Error> {
+        let CopyPermissions { ref from, ref to } = *self;
+
+        log::info!("{} -> {} (permissions)", from.display(), to.display());
+        os::copy_permissions(from, to)
+    }
+}
+
+impl From<CopyPermissions> for Unit {
+    fn from(value: CopyPermissions) -> Unit {
+        Unit::CopyPermissions(value)
     }
 }
 

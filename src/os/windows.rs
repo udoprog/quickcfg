@@ -4,6 +4,7 @@ use crate::unit::{AddMode, Symlink};
 use anyhow::{Error, bail};
 use std::borrow::Cow;
 use std::env::consts;
+use std::fs::Metadata;
 use std::path::Path;
 
 /// Convert into an executable path.
@@ -41,6 +42,22 @@ pub fn add_mode(mode: &AddMode) -> Result<(), Error> {
         }
     }
 
+    Ok(())
+}
+
+/// Test if the permission bits of `from` and `to` differ.
+///
+/// NB: see [copy_permissions], there is nothing for us to sync on windows.
+pub fn permissions_differ(_: &Metadata, _: &Metadata) -> bool {
+    false
+}
+
+/// Copy the permissions of `from` onto `to`.
+///
+/// NB: the only permission windows exposes through `fs::Permissions` is the
+/// readonly flag. Propagating it would mark the destination readonly and cause
+/// the next copy over it to fail, so this is deliberately a no-op.
+pub fn copy_permissions(_: &Path, _: &Path) -> Result<(), Error> {
     Ok(())
 }
 

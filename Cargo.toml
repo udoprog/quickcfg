@@ -3,7 +3,7 @@ name = "quickcfg"
 version = "0.6.3"
 authors = ["John-John Tedro <udoprog@tedro.se>"]
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.97"
 description = "Do basic configuration of a system, declaratively and quickly."
 documentation = "https://docs.rs/quickcfg"
 readme = "README.md"
@@ -40,7 +40,7 @@ fxhash = "0.2.1"
 humantime = "2.1.0"
 reqwest = { version = "0.13.3", features = ["blocking"] }
 filetime = "0.2.21"
-git2 = { version = "0.20.2", optional = true }
+git2 = { version = "0.21.0", optional = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.61.2"
