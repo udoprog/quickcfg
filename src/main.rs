@@ -442,17 +442,20 @@ fn try_update_config(
         return Ok(false);
     }
 
-    let git = git_system.open(root)?;
+    let git = git_system.open(root).context("Opening git repository")?;
 
-    if !git.needs_update()? {
+    if !git
+        .needs_update()
+        .context("Checking if git repository needs update")?
+    {
         state.touch("git");
         return Ok(false);
     }
 
     if opts.force {
-        git.force_update()?;
+        git.force_update().context("Forcing git update")?;
     } else {
-        git.update()?;
+        git.update().context("Updating git repository")?;
     }
 
     state.touch("git");
